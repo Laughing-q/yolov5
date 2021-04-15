@@ -496,7 +496,8 @@ def non_max_suppression(prediction,
     xc = prediction[..., 4] > conf_thres  # candidates
 
     # Settings
-    min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
+    # (pixels) minimum and maximum box width and height
+    min_wh, max_wh = 2, 4096
     max_det = 300  # maximum number of detections per image
     max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
     time_limit = 10.0  # seconds to quit after
@@ -598,7 +599,8 @@ def non_max_suppression_(prediction,
     xc = prediction[..., 4] > conf_thres  # candidates
 
     # Settings
-    min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
+    # (pixels) minimum and maximum box width and height
+    min_wh, max_wh = 2, 4096
     max_det = 300  # maximum number of detections per image
     max_nms = 30000  # maximum number of boxes into torchvision.ops.nms()
     time_limit = 10.0  # seconds to quit after
@@ -637,9 +639,8 @@ def non_max_suppression_(prediction,
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
             i, j = (x[:, 37:] > conf_thres).nonzero(as_tuple=False).T
-            x = torch.cat((box[i], x[i, j + 37,
-                                     None], j[:, None].float(), pred_masks[i]),
-                          1)
+            x = torch.cat((box[i], x[i, j + 37, None], j[:, None].float(),
+                           pred_masks[i]), 1)
         else:  # best class only
             conf, j = x[:, 37:].max(1, keepdim=True)
             x = torch.cat((box, conf, j.float(), pred_masks),
@@ -695,15 +696,22 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     shape: input_image_size, (h, w)
     """
     # [mask_h, mask_w, n]
-    print(proto_out.shape)
-    print(out_masks.shape)
-    masks = proto_out.permute(1, 2, 0).contiguous() @ out_masks.T
-    masks = masks.sigmoid()
+    # print(proto_out.dtype)
+    # print(out_masks.dtype)
+    # print(proto_out)
+    # print('out_masks:', out_masks.tanh())
+    masks = proto_out.float().permute(1, 2,
+                                      0).contiguous() @ out_masks.tanh().T
+    # print(masks)
+    # masks = masks.sigmoid()
     masks = masks.permute(2, 0, 1).contiguous()
     # [n, mask_h, mask_w]
     masks = F.interpolate(masks.unsqueeze(0), shape, mode='nearest').squeeze(0)
-    masks = crop(masks.permute(1, 2, 0), bboxes)
-    return masks.gt_(0.5)
+    # masks = crop(masks.permute(1, 2, 0), bboxes)
+    # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
+    # masks = torch.where(masks > 0, 1., 0.)
+    # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
+    return masks
 
 
 def crop(masks, boxes):

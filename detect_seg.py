@@ -13,6 +13,8 @@ from utils.general import check_img_size, check_requirements, check_imshow, non_
     scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, process_mask
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
+import numpy as np
+np.set_printoptions(threshold=10000000)
 
 
 def detect(save_img=False):
@@ -109,16 +111,26 @@ def detect(save_img=False):
                                           0]]  # normalization gain whwh
             if len(det):
                 out_masks = det[:, 6:]
-                masks = process_mask(proto_out[i], out_masks, det[:, 4],
+                # [img_h, img_w, num]
+                masks = process_mask(proto_out[i], out_masks, det[:, :4],
                                      img.shape[2:])
-                # Rescale boxes from img_size to im0 size
+                print(masks.shape)
+                for mi in masks.cpu().numpy():
+                    print((mi > 0).all())
+                    print(mi)
+                    # exit()
+                    cv2.imshow('p', mi * 255)
+                    if cv2.waitKey(0) == ord('q'):
+                        exit()
+                    # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4],
                                           im0.shape).round()
 
                 # Print results
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
-                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
+                    # add to string
+                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det[:, :6]):
@@ -181,13 +193,12 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default='/d/projects/research/yolov5/runs/train/exp2/weights/best.pt',
+        default='/home/laughing/code/yolov5/runs/exp2/weights/best.pt',
         help='model.pt path(s)')
-    parser.add_argument(
-        '--source',
-        type=str,
-        default='/d/projects/research/yolov5/data/balloon/images/val',
-        help='source')  # file/folder, 0 for webcam
+    parser.add_argument('--source',
+                        type=str,
+                        default='/home/laughing/code/yolov5/data/val',
+                        help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size',
                         type=int,
                         default=640,

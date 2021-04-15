@@ -1,5 +1,11 @@
 # YOLOv5 YOLO-specific modules
 
+from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
+    select_device, copy_attr
+from utils.general import make_divisible, check_file, set_logging
+from utils.autoanchor import check_anchor_order
+from models.experimental import *
+from models.common import *
 import argparse
 import logging
 import sys
@@ -7,13 +13,6 @@ from copy import deepcopy
 
 sys.path.append('./')  # to run '$ python *.py' files in subdirectories
 logger = logging.getLogger(__name__)
-
-from models.common import *
-from models.experimental import *
-from utils.autoanchor import check_anchor_order
-from utils.general import make_divisible, check_file, set_logging
-from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
-    select_device, copy_attr
 
 try:
     import thop  # for FLOPS computation
@@ -132,10 +131,7 @@ class DetectSegment(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self,
-                 cfg='yolov5s.yaml',
-                 ch=3,
-                 nc=None,
+    def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None,
                  anchors=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         if isinstance(cfg, dict):
@@ -247,10 +243,10 @@ class Model(nn.Module):
             b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
             b.data[:, 4] += math.log(
                 8 / (640 / s)**2)  # obj (8 objects per 640 image)
-            b.data[:,
-                   5:] += math.log(0.6 /
-                                   (m.nc - 0.99)) if cf is None else torch.log(
-                                       cf / cf.sum())  # cls
+            b.data[:, 5:] += math.log(
+                0.6 /
+                (m.nc - 0.99)) if cf is None else torch.log(cf /
+                                                            cf.sum())  # cls
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def _print_biases(self):
@@ -358,7 +354,8 @@ def parse_model(d, ch):  # model_dict, input_channels(3)
             *[m(*args) for _ in range(n)]) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace('__main__.', '')  # module type
         np = sum([x.numel() for x in m_.parameters()])  # number params
-        m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
+        # attach index, 'from' index, type, number params
+        m_.i, m_.f, m_.type, m_.np = i, f, t, np
         logger.info('%3s%18s%3s%10.0f  %-40s%-30s' %
                     (i, f, n, np, t, args))  # print
         save.extend(x % i for x in ([f] if isinstance(f, int) else f)
