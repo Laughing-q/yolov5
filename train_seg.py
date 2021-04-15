@@ -21,7 +21,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-import test  # import test.py to get mAP after each epoch
+import test_seg  # import test.py to get mAP after each epoch
 from models.experimental import attempt_load
 from models.yolo import Model
 from utils.autoanchor import check_anchors
@@ -124,7 +124,7 @@ def train(hyp, opt, device, tb_writer=None):
             v.requires_grad = False
 
     # Optimizer
-    nbs = 64  # nominal batch size
+    nbs = 32  # nominal batch size
     accumulate = max(round(nbs / total_batch_size),
                      1)  # accumulate loss before optimizing
     hyp['weight_decay'] *= total_batch_size * accumulate / nbs  # scale weight_decay
@@ -234,7 +234,8 @@ def train(hyp, opt, device, tb_writer=None):
                                             workers=opt.workers,
                                             image_weights=opt.image_weights,
                                             quad=opt.quad,
-                                            prefix=colorstr('train: '))
+                                            prefix=colorstr('train: '),
+                                            mask_head=True)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (
@@ -342,18 +343,18 @@ def train(hyp, opt, device, tb_writer=None):
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
         # dataset.mosaic_border = [b - imgsz, -b]  # height, width borders
 
-        mloss = torch.zeros(4, device=device)  # mean losses
+        mloss = torch.zeros(5, device=device)  # mean losses
         if rank != -1:
             dataloader.sampler.set_epoch(epoch)
         pbar = enumerate(dataloader)
         logger.info(
-            ('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls',
-                                   'total', 'labels', 'img_size'))
+            ('\n' + '%10s' * 9) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls',
+                                   'lseg', 'total', 'labels', 'img_size'))
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
         for i, (
-                imgs, targets, paths, _
+                imgs, targets, paths, _, masks
         ) in pbar:  # batch -------------------------------------------------------------
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float(
@@ -392,8 +393,9 @@ def train(hyp, opt, device, tb_writer=None):
             # Forward
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)  # forward
-                loss, loss_items = compute_loss(
-                    pred, targets.to(device))  # loss scaled by batch_size
+                loss, loss_items = compute_loss.segment_loss(
+                    pred, targets.to(device),
+                    masks.to(device))  # loss scaled by batch_size
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
                 if opt.quad:
@@ -417,7 +419,7 @@ def train(hyp, opt, device, tb_writer=None):
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9
                                  if torch.cuda.is_available() else 0)  # (GB)
                 s = ('%10s' * 2 +
-                     '%10.4g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem,
+                     '%10.4g' * 7) % ('%g/%g' % (epoch, epochs - 1), mem,
                                       *mloss, targets.shape[0], imgs.shape[-1])
                 pbar.set_description(s)
 
@@ -453,22 +455,24 @@ def train(hyp, opt, device, tb_writer=None):
                                 'yaml', 'nc', 'hyp', 'gr', 'names', 'stride',
                                 'class_weights'
                             ])
-            final_epoch = epoch + 1 == epochs
+            # final_epoch = epoch + 1 == epochs
+            final_epoch = False
             if not opt.notest or final_epoch:  # Calculate mAP
                 wandb_logger.current_epoch = epoch + 1
-                results, maps, times = test.test(data_dict,
-                                                 batch_size=batch_size * 2,
-                                                 imgsz=imgsz_test,
-                                                 model=ema.ema,
-                                                 single_cls=opt.single_cls,
-                                                 dataloader=testloader,
-                                                 save_dir=save_dir,
-                                                 verbose=nc < 50
-                                                 and final_epoch,
-                                                 plots=plots and final_epoch,
-                                                 wandb_logger=wandb_logger,
-                                                 compute_loss=compute_loss,
-                                                 is_coco=is_coco)
+                results, maps, times = test_seg.test(data_dict,
+                                                     batch_size=batch_size * 2,
+                                                     imgsz=imgsz_test,
+                                                     model=ema.ema,
+                                                     single_cls=opt.single_cls,
+                                                     dataloader=testloader,
+                                                     save_dir=save_dir,
+                                                     verbose=nc < 50
+                                                     and final_epoch,
+                                                     plots=plots
+                                                     and final_epoch,
+                                                     wandb_logger=wandb_logger,
+                                                     compute_loss=compute_loss,
+                                                     is_coco=is_coco)
 
             # Write
             with open(results_file, 'a') as f:
@@ -566,18 +570,19 @@ def train(hyp, opt, device, tb_writer=None):
         if opt.data.endswith('coco.yaml') and nc == 80:  # if COCO
             for m in (last,
                       best) if best.exists() else (last):  # speed, mAP tests
-                results, _, _ = test.test(opt.data,
-                                          batch_size=batch_size * 2,
-                                          imgsz=imgsz_test,
-                                          conf_thres=0.001,
-                                          iou_thres=0.7,
-                                          model=attempt_load(m, device).half(),
-                                          single_cls=opt.single_cls,
-                                          dataloader=testloader,
-                                          save_dir=save_dir,
-                                          save_json=True,
-                                          plots=False,
-                                          is_coco=is_coco)
+                results, _, _ = test_seg.test(opt.data,
+                                              batch_size=batch_size * 2,
+                                              imgsz=imgsz_test,
+                                              conf_thres=0.001,
+                                              iou_thres=0.7,
+                                              model=attempt_load(
+                                                  m, device).half(),
+                                              single_cls=opt.single_cls,
+                                              dataloader=testloader,
+                                              save_dir=save_dir,
+                                              save_json=True,
+                                              plots=False,
+                                              is_coco=is_coco)
 
         # Strip optimizers
         final = best if best.exists() else last  # final model
@@ -605,19 +610,22 @@ if __name__ == '__main__':
                         type=str,
                         default='weights/yolov5s.pt',
                         help='initial weights path')
-    parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
+    parser.add_argument('--cfg',
+                        type=str,
+                        default='./models/yolov5s_seg.yaml',
+                        help='model.yaml path')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coins.yaml',
+                        default='data/balloon.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
                         default='data/hyp.scratch.yaml',
                         help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=16,
+                        default=8,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',
@@ -637,6 +645,7 @@ if __name__ == '__main__':
                         help='only save final checkpoint')
     parser.add_argument('--notest',
                         action='store_true',
+                        default=True,
                         help='only test final epoch')
     parser.add_argument('--noautoanchor',
                         action='store_true',

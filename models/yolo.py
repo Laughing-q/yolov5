@@ -77,7 +77,7 @@ class DetectSegment(nn.Module):
         """
         5 + 32 + class_num 
         """
-        super(Detect, self).__init__()
+        super(DetectSegment, self).__init__()
         self.nc = nc  # number of classes
         self.mask_dim = 32
         self.no = nc + 5 + self.mask_dim  # number of outputs per anchor
@@ -92,10 +92,10 @@ class DetectSegment(nn.Module):
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1)
                                for x in ch)  # output conv
         self.proto_net = nn.Sequential(
-            nn.Conv2d(c1, 256, kernel_size=3, stride=1, padding=1), nn.SiLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.SiLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.SiLU(),
-            nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(ch[0], 256, kernel_size=3, stride=1, padding=1),
+            nn.SiLU(), nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.SiLU(), nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.SiLU(), nn.Upsample(scale_factor=2, mode='nearest'),
             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.SiLU(),
             nn.Conv2d(256, self.mask_dim, kernel_size=1, padding=0), nn.SiLU())
 
@@ -105,9 +105,9 @@ class DetectSegment(nn.Module):
         self.training |= self.export
         proto_out = None
         for i in range(self.nl):
-            x[i] = self.m[i](x[i])  # conv
             if i == 0:
                 proto_out = self.proto_net(x[i])
+            x[i] = self.m[i](x[i])  # conv
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
             x[i] = x[i].view(bs, self.na, self.no, ny,
                              nx).permute(0, 1, 3, 4, 2).contiguous()
@@ -122,7 +122,8 @@ class DetectSegment(nn.Module):
                 y[..., 2:4] = (y[..., 2:4] * 2)**2 * self.anchor_grid[i]  # wh
                 z.append(y.view(bs, -1, self.no))
 
-        return (x, proto_out) if self.training else (torch.cat(z, 1), x)
+        return (x, proto_out) if self.training else (torch.cat(z, 1), x,
+                                                     proto_out)
 
     @staticmethod
     def _make_grid(nx=20, ny=20):
@@ -166,6 +167,17 @@ class Model(nn.Module):
             s = 256  # 2x min stride
             m.stride = torch.tensor([
                 s / x.shape[-2] for x in self.forward(torch.zeros(1, ch, s, s))
+            ])  # forward
+            m.anchors /= m.stride.view(-1, 1, 1)
+            check_anchor_order(m)
+            self.stride = m.stride
+            self._initialize_biases()  # only run once
+            # print('Strides: %s' % m.stride.tolist())
+        elif isinstance(m, DetectSegment):
+            s = 256  # 2x min stride
+            m.stride = m.stride = torch.tensor([
+                s / x.shape[-2]
+                for x in self.forward(torch.zeros(1, ch, s, s))[0]
             ])  # forward
             m.anchors /= m.stride.view(-1, 1, 1)
             check_anchor_order(m)

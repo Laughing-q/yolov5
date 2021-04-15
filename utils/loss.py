@@ -251,24 +251,24 @@ class ComputeLoss:
                      masks):  # predictions, targets, model
         """
         proto_out:[batch-size, mask_dim, mask_hegiht, mask_width]
-        masks:[batch-size, num_objs, image_height, image_width]
+        masks:[batch-size * num_objs, image_height, image_width]
         每张图片objects数量不同，到时候处理时填充不足的
         """
         p = preds[0]
         proto_out = preds[1]
+        # print(proto_out.shape)
         mask_h, mask_w = proto_out.shape[2:]
         proto_out = proto_out.permute(0, 2, 3, 1)
         device = targets.device
         lcls, lbox, lobj, lseg = torch.zeros(1, device=device), torch.zeros(
             1, device=device), torch.zeros(1, device=device), torch.zeros(
                 1, device=device)
-        tcls, tbox, indices, anchors, img_ids = self.build_targets_(
+        tcls, tbox, indices, anchors, tidxs = self.build_targets_(
             p, targets)  # targets
 
         # Losses
         for i, pi in enumerate(p):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
-            img_id = img_ids[i]
             tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
 
             n = b.shape[0]  # number of targets
@@ -299,21 +299,39 @@ class ComputeLoss:
 
                 # mask proto
                 # [mask_h, mask_w, mask_dim] @ [mask_dim, num_pos]
-                proto_temp = proto_out[b]
+                # proto_temp = proto_out[b]
+                # print(proto_temp.shape)
+                # print(ps[:, 5:37].shape)
+                # pred_mask = torch.clamp(
+                #     proto_temp @ ps[:, 5:37].tanh().T,
+                #     0,
+                #     # mask_h, mask_w, num_pos
+                #     1)
+                # print(pred_mask.shape)
+                # # num_pos, image_h, image_w
+                mask_gt = masks[tidxs[i]]
+                downsampled_masks = F.interpolate(
+                    mask_gt[None, :],
+                    (mask_h, mask_w),
+                    mode='nearest',
+                )
                 # mask_h, mask_w, num_pos
-                pred_mask = torch.clamp(proto_temp @ ps[:, 5:37].tanh().T, 0,
-                                        1)
-                # num_pos, image_h, image_w
-                mask_gt = masks[b, img_id]
-                downsampled_masks = F.interpolate(mask_gt, (mask_h, mask_w),
-                                                  mode='nearest',
-                                                  align_corners=False)
-                # mask_h, mask_w, num_pos
-                downsampled_masks = downsampled_masks.permute(1, 2,
-                                                              0).contiguous()
-                lseg += F.binary_cross_entropy(downsampled_masks,
-                                               mask_gt,
-                                               reduce='sum')
+                # downsampled_masks = downsampled_masks.squeeze().permute(
+                #     1, 2, 0).contiguous()
+                # lseg += F.binary_cross_entropy(pred_mask,
+                #                                downsampled_masks,
+                #                                reduce='sum')
+                for bi in b.unique():
+                    # print(b, bi)
+                    mask_gti = downsampled_masks.squeeze()[b == bi]
+                    mask_gti = mask_gti.permute(1, 2, 0).contiguous()
+                    psi = ps[b == bi]
+                    pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
+                    # print(pred_maski)
+                    # print(mask_gti)
+                    lseg += F.binary_cross_entropy_with_logits(pred_maski,
+                                                               mask_gti,
+                                                               reduce='mean')
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:
@@ -339,28 +357,31 @@ class ComputeLoss:
     def build_targets_(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
         na, nt = self.na, targets.shape[0]  # number of anchors, targets
-        tcls, tbox, indices, anch, img_ids = [], [], [], [], []
+        tcls, tbox, indices, anch, tidxs = [], [], [], [], []
         gain = torch.ones(
-            7, device=targets.device)  # normalized to gridspace gain
+            8, device=targets.device)  # normalized to gridspace gain
         ai = torch.arange(na,
                           device=targets.device).float().view(na, 1).repeat(
                               1, nt)  # same as .repeat_interleave(nt)
 
-        batch_idx = targets[:, 0]
-        b = []
-        index = -1
-        ori = batch_idx[0]
-        for i in range(len(batch_idx)):
-            if a[i] == ori:
-                index += 1
-                b.append(index)
-            else:
-                ori = a[i]
-                index = 0
-                b.append(index)
-        targets = torch.cat((targets.repeat(
-            na, 1, 1), ai[:, :, None], torch.tensor(b)[None, None, :]),
-                            2)  # append anchor indices
+        ti = torch.arange(nt,
+                          device=targets.device).float().view(1, nt).repeat(
+                              na, 1)  # same as .repeat_interleave(nt)
+        # batch_idx = targets[:, 0]
+        # b = []
+        # index = -1
+        # ori = batch_idx[0]
+        # for i in range(len(batch_idx)):
+        #     if a[i] == ori:
+        #         index += 1
+        #         b.append(index)
+        #     else:
+        #         ori = a[i]
+        #         index = 0
+        #         b.append(index)
+        targets = torch.cat(
+            (targets.repeat(na, 1, 1), ai[:, :, None], ti[:, :, None]),
+            2)  # append anchor indices
 
         g = 0.5  # bias
         off = torch.tensor(
@@ -409,13 +430,13 @@ class ComputeLoss:
 
             # Append
             a = t[:, 6].long()  # anchor indices
-            img_id = t[:, 7].long()
+            tidx = t[:, 7].long()
             indices.append(
                 (b, a, gj.clamp_(0, gain[3] - 1),
                  gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
             tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
             anch.append(anchors[a])  # anchors
             tcls.append(c)  # class
-            img_ids.append(img_id)
+            tidxs.append(tidx)
 
-        return tcls, tbox, indices, anch, img_ids
+        return tcls, tbox, indices, anch, tidxs
