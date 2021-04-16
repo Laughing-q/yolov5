@@ -14,6 +14,7 @@ from utils.general import check_img_size, check_requirements, check_imshow, non_
 from utils.plots import plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 import numpy as np
+
 np.set_printoptions(threshold=10000000)
 
 
@@ -116,13 +117,13 @@ def detect(save_img=False):
                                      img.shape[2:])
                 print(masks.shape)
                 for mi in masks.cpu().numpy():
-                    print((mi > 0).all())
-                    print(mi)
+                    # print((mi > 0).all())
+                    # print(mi[mi > 0])
                     # exit()
                     cv2.imshow('p', mi * 255)
                     if cv2.waitKey(0) == ord('q'):
                         exit()
-                    # Rescale boxes from img_size to im0 size
+                # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4],
                                           im0.shape).round()
 
@@ -193,12 +194,14 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default='/home/laughing/code/yolov5/runs/exp2/weights/best.pt',
+        default=
+        '/d/projects/research/yolov5/runs/train/seg50_leakyrelu/weights/best.pt',
         help='model.pt path(s)')
-    parser.add_argument('--source',
-                        type=str,
-                        default='/home/laughing/code/yolov5/data/val',
-                        help='source')  # file/folder, 0 for webcam
+    parser.add_argument(
+        '--source',
+        type=str,
+        default='/d/projects/research/yolov5/data/balloon/images/val',
+        help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size',
                         type=int,
                         default=640,

@@ -599,7 +599,13 @@ def plot_results_overlay(
         fig.savefig(f.replace('.txt', '.png'), dpi=200)
 
 
-def plot_results(start=0, stop=0, bucket='', id=(), labels=(), save_dir=''):
+def plot_results(start=0,
+                 stop=0,
+                 bucket='',
+                 id=(),
+                 labels=(),
+                 save_dir='',
+                 mask_head=False):
     # Plot training 'results*.txt'. from utils.plots import *; plot_results(save_dir='runs/train/exp')
     fig, ax = plt.subplots(2, 5, figsize=(12, 6), tight_layout=True)
     ax = ax.ravel()
@@ -622,9 +628,11 @@ def plot_results(start=0, stop=0, bucket='', id=(), labels=(), save_dir=''):
         save_dir)
     for fi, f in enumerate(files):
         try:
-            results = np.loadtxt(f,
-                                 usecols=[2, 3, 4, 8, 9, 12, 13, 14, 10, 11],
-                                 ndmin=2).T
+            results = np.loadtxt(
+                f,
+                usecols=[2, 3, 4, 9, 10, 13, 14, 15, 11, 12]
+                if mask_head else [2, 3, 4, 8, 9, 12, 13, 14, 10, 11],
+                ndmin=2).T
             n = results.shape[1]  # number of rows
             x = range(start, min(stop, n) if stop else n)
             for i in range(10):

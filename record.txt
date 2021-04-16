@@ -1,0 +1,10 @@
+1.silu激活函数：损失下降
+2.relu函数：损失稳定0.6
+3.在进行logit交叉熵损失函数之前使用sigmoid：损失稳定0.6
+4.leaky_relu激活函数，损失下降
+
+1和3的输出proto_out全都是-0.26/-0.22, out_masks.tanh()都是0.75左右
+4的输出proto_out在-0.1~-0.3左右，out_masks.tanh()都是0.75左右
+
+
+

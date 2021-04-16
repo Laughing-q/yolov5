@@ -1,4 +1,5 @@
 import torch
+from utils.plots import plot_results
 import cv2
 import numpy as np
 
@@ -84,3 +85,6 @@ print(a.shape)
 print(b.shape)
 # print(a @ b)
 print(torch.mm(b, a))
+
+plot_results(save_dir='/d/projects/research/yolov5/runs/train/seg200/',
+             mask_head=True)

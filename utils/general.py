@@ -24,7 +24,8 @@ from utils.metrics import fitness
 from utils.torch_utils import init_torch_seeds
 
 # Settings
-torch.set_printoptions(linewidth=320, precision=5, profile='long')
+# torch.set_printoptions(linewidth=320, precision=5, profile='long')
+torch.set_printoptions(threshold=100000000)
 np.set_printoptions(linewidth=320,
                     formatter={'float_kind': '{:11.5g}'.format
                                })  # format short g, %precision=5
@@ -639,8 +640,9 @@ def non_max_suppression_(prediction,
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
             i, j = (x[:, 37:] > conf_thres).nonzero(as_tuple=False).T
-            x = torch.cat((box[i], x[i, j + 37, None], j[:, None].float(),
-                           pred_masks[i]), 1)
+            x = torch.cat((box[i], x[i, j + 37,
+                                     None], j[:, None].float(), pred_masks[i]),
+                          1)
         else:  # best class only
             conf, j = x[:, 37:].max(1, keepdim=True)
             x = torch.cat((box, conf, j.float(), pred_masks),
@@ -703,7 +705,8 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     masks = proto_out.float().permute(1, 2,
                                       0).contiguous() @ out_masks.tanh().T
     # print(masks)
-    # masks = masks.sigmoid()
+    masks = masks.sigmoid()
+    # print('after sigmoid:', masks)
     masks = masks.permute(2, 0, 1).contiguous()
     # [n, mask_h, mask_w]
     masks = F.interpolate(masks.unsqueeze(0), shape, mode='nearest').squeeze(0)
@@ -711,7 +714,7 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
     # masks = torch.where(masks > 0, 1., 0.)
     # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
-    return masks
+    return masks.gt_(0.005)
 
 
 def crop(masks, boxes):

@@ -256,7 +256,8 @@ def train(hyp, opt, device, tb_writer=None):
             world_size=opt.world_size,
             workers=opt.workers,
             pad=0.5,
-            prefix=colorstr('val: '))[0]
+            prefix=colorstr('val: '),
+            mask_head=True)[0]
 
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
@@ -552,7 +553,8 @@ def train(hyp, opt, device, tb_writer=None):
     if rank in [-1, 0]:
         # Plots
         if plots:
-            plot_results(save_dir=save_dir)  # save as results.png
+            plot_results(save_dir=save_dir,
+                         mask_head=True)  # save as results.png
             if wandb_logger.wandb:
                 files = [
                     'results.png', 'confusion_matrix.png',
@@ -645,7 +647,6 @@ if __name__ == '__main__':
                         help='only save final checkpoint')
     parser.add_argument('--notest',
                         action='store_true',
-                        default=True,
                         help='only test final epoch')
     parser.add_argument('--noautoanchor',
                         action='store_true',
@@ -687,7 +688,9 @@ if __name__ == '__main__':
                         default='runs/train',
                         help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
-    parser.add_argument('--name', default='exp', help='save to project/name')
+    parser.add_argument('--name',
+                        default='seg50_leakyrelu',
+                        help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',
                         help='existing project/name ok, do not increment')

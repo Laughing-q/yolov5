@@ -3,6 +3,8 @@
 import torch
 import torch.nn.functional as F
 import torch.nn as nn
+import cv2
+import numpy as np
 
 from utils.general import bbox_iou
 from utils.torch_utils import is_parallel
@@ -257,6 +259,7 @@ class ComputeLoss:
         p = preds[0]
         proto_out = preds[1]
         # print(proto_out.shape)
+        # batch_size, mask_dim, mask_h, mask_w
         mask_h, mask_w = proto_out.shape[2:]
         proto_out = proto_out.permute(0, 2, 3, 1)
         device = targets.device
@@ -328,10 +331,15 @@ class ComputeLoss:
                     psi = ps[b == bi]
                     pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
                     # print(pred_maski)
-                    # print(mask_gti)
-                    lseg += F.binary_cross_entropy_with_logits(pred_maski,
-                                                               mask_gti,
-                                                               reduce='mean')
+                    # print(mask_gti.shape)
+                    # cv2.imshow(
+                    #     'p',
+                    #     mask_gti[:, :, 0].cpu().numpy().astype(np.uint8) * 255)
+                    # if cv2.waitKey(0) == ord('q'):
+                    #     exit()
+                    lseg += F.binary_cross_entropy_with_logits(
+                        pred_maski, mask_gti, reduction='mean')
+                    # lseg += self.BCEcls(pred_maski, mask_gti)
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:

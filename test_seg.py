@@ -12,7 +12,7 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_
 from utils.metrics import ap_per_class, ConfusionMatrix
 from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized
@@ -101,7 +101,8 @@ def test(
                                        opt,
                                        pad=0.5,
                                        rect=True,
-                                       prefix=colorstr(f'{task}: '))[0]
+                                       prefix=colorstr(f'{task}: '),
+                                       mask_head=True)[0]
 
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
@@ -142,11 +143,11 @@ def test(
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)
                   ] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
-            out, out_masks = non_max_suppression(out,
-                                                 conf_thres=conf_thres,
-                                                 iou_thres=iou_thres,
-                                                 labels=lb,
-                                                 multi_label=True)
+            out = non_max_suppression_(out,
+                                       conf_thres=conf_thres,
+                                       iou_thres=iou_thres,
+                                       labels=lb,
+                                       multi_label=True)
             t1 += time_synchronized() - t
 
         # Statistics per image
@@ -172,7 +173,7 @@ def test(
             if save_txt:
                 gn = torch.tensor(shapes[si][0])[[1, 0, 1, 0
                                                   ]]  # normalization gain whwh
-                for *xyxy, conf, cls in predn.tolist():
+                for *xyxy, conf, cls in predn[:, :6].tolist():
                     xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) /
                             gn).view(-1).tolist()  # normalized xywh
                     line = (cls, *xywh,
@@ -378,14 +379,15 @@ def test(
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='test.py')
-    parser.add_argument('--weights',
-                        nargs='+',
-                        type=str,
-                        default='yolov5s.pt',
-                        help='model.pt path(s)')
+    parser.add_argument(
+        '--weights',
+        nargs='+',
+        type=str,
+        default='/d/projects/research/yolov5/runs/train/exp5/weights/best.pt',
+        help='model.pt path(s)')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coco128.yaml',
+                        default='data/balloon.yaml',
                         help='*.data path')
     parser.add_argument('--batch-size',
                         type=int,

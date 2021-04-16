@@ -124,7 +124,7 @@ def train(hyp, opt, device, tb_writer=None):
             v.requires_grad = False
 
     # Optimizer
-    nbs = 64  # nominal batch size
+    nbs = 32  # nominal batch size
     accumulate = max(round(nbs / total_batch_size),
                      1)  # accumulate loss before optimizing
     hyp['weight_decay'] *= total_batch_size * accumulate / nbs  # scale weight_decay
@@ -417,7 +417,7 @@ def train(hyp, opt, device, tb_writer=None):
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9
                                  if torch.cuda.is_available() else 0)  # (GB)
                 s = ('%10s' * 2 +
-                     '%10.4g' * 7) % ('%g/%g' % (epoch, epochs - 1), mem,
+                     '%10.4g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem,
                                       *mloss, targets.shape[0], imgs.shape[-1])
                 pbar.set_description(s)
 
@@ -608,16 +608,16 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coins.yaml',
+                        default='data/balloon.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
                         default='data/hyp.scratch.yaml',
                         help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=16,
+                        default=8,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',
@@ -678,7 +678,9 @@ if __name__ == '__main__':
                         default='runs/train',
                         help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
-    parser.add_argument('--name', default='exp', help='save to project/name')
+    parser.add_argument('--name',
+                        default='origin_detect',
+                        help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',
                         help='existing project/name ok, do not increment')
