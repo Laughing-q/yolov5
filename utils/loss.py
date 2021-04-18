@@ -350,7 +350,7 @@ class ComputeLoss:
                     # pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
                     pred_maski = proto_out[bi] @ psi.tanh().T
                     pred_maski = pred_maski.sigmoid()
-                    pred_maski = crop(pred_maski, mxyxy)
+                    # pred_maski = crop(pred_maski, mxyxy)
                     savei += 1
                     # print(pred_maski)
                     # print(mask_gti.shape)

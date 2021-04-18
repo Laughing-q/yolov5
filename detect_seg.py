@@ -120,13 +120,13 @@ def detect(save_img=False):
                                      img.shape[2:])
                 # print(masks.shape)
                 # np.save(p.name + '.npy', masks.cpu().numpy())
-                # for mi in masks.cpu().numpy():
-                #     # print((mi > 0).all())
-                #     print(mi[mi > 0])
-                #     # exit()
-                #     cv2.imshow('p', mi * 255)
-                #     if cv2.waitKey(0) == ord('q'):
-                #         exit()
+                for mi in masks.cpu().numpy():
+                    # print((mi > 0).all())
+                    print(mi[mi > 0])
+                    # exit()
+                    cv2.imshow('p', mi * 255)
+                    if cv2.waitKey(0) == ord('q'):
+                        exit()
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4],
                                           im0.shape).round()
@@ -199,7 +199,7 @@ if __name__ == '__main__':
         nargs='+',
         type=str,
         default=
-        '/home/laughing/code/yolov5/runs/train/seg50_relu250/weights/best.pt',
+        '/home/laughing/code/yolov5/runs/train/seg50_relu251/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',

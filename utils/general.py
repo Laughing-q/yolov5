@@ -711,11 +711,11 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     masks = masks.permute(2, 0, 1).contiguous()
     # [n, mask_h, mask_w]
     masks = F.interpolate(masks.unsqueeze(0), shape, mode='nearest').squeeze(0)
-    masks = crop(masks.permute(1, 2, 0), bboxes)
+    # masks = crop(masks.permute(1, 2, 0), bboxes)
     # return masks.gt_(0.005).permute(2, 0, 1).contiguous()
     # masks = torch.where(masks > 0, 1., 0.)
-    return masks.gt_(0.5).permute(2, 0, 1).contiguous()
-    # return masks  # gt_(0.5)
+    # return masks.permute(2, 0, 1).contiguous()
+    return masks  # gt_(0.5)
 
 
 def crop(masks, boxes):
