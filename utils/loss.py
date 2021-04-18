@@ -6,12 +6,12 @@ import torch.nn as nn
 import cv2
 import numpy as np
 
-from utils.general import bbox_iou
+from utils.general import bbox_iou, crop, xywh2xyxy
 from utils.torch_utils import is_parallel
 
 
 def smooth_BCE(
-    eps=0.1
+        eps=0.1
 ):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
     # return positive, negative label smoothing BCE targets
     return 1.0 - 0.5 * eps, 0.5 * eps
@@ -150,10 +150,9 @@ class ComputeLoss:
                 lbox += (1.0 - iou).mean()  # iou loss
 
                 # Objectness
-                tobj[b, a, gj,
-                     gi] = (1.0 -
-                            self.gr) + self.gr * iou.detach().clamp(0).type(
-                                tobj.dtype)  # iou ratio
+                tobj[b, a, gj, gi] = (
+                    1.0 - self.gr) + self.gr * iou.detach().clamp(0).type(
+                        tobj.dtype)  # iou ratio
 
                 # Classification
                 if self.nc > 1:  # cls loss (only if multiple classes)
@@ -258,6 +257,7 @@ class ComputeLoss:
         """
         p = preds[0]
         proto_out = preds[1]
+        mask_out = preds[2]
         # print(proto_out.shape)
         # batch_size, mask_dim, mask_h, mask_w
         mask_h, mask_w = proto_out.shape[2:]
@@ -266,11 +266,13 @@ class ComputeLoss:
         lcls, lbox, lobj, lseg = torch.zeros(1, device=device), torch.zeros(
             1, device=device), torch.zeros(1, device=device), torch.zeros(
                 1, device=device)
-        tcls, tbox, indices, anchors, tidxs = self.build_targets_(
+        tcls, tbox, indices, anchors, tidxs, xywh = self.build_targets_(
             p, targets)  # targets
 
         # Losses
-        for i, pi in enumerate(p):  # layer index, layer predictions
+        savei = 0
+        for i, (pi, mi) in enumerate(zip(
+                p, mask_out)):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
             tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
 
@@ -288,10 +290,9 @@ class ComputeLoss:
                 lbox += (1.0 - iou).mean()  # iou loss
 
                 # Objectness
-                tobj[b, a, gj,
-                     gi] = (1.0 -
-                            self.gr) + self.gr * iou.detach().clamp(0).type(
-                                tobj.dtype)  # iou ratio
+                tobj[b, a, gj, gi] = (
+                    1.0 - self.gr) + self.gr * iou.detach().clamp(0).type(
+                        tobj.dtype)  # iou ratio
 
                 # Classification
                 if self.nc > 1:  # cls loss (only if multiple classes)
@@ -324,21 +325,47 @@ class ComputeLoss:
                 # lseg += F.binary_cross_entropy(pred_mask,
                 #                                downsampled_masks,
                 #                                reduce='sum')
+                # print(b.unique())
                 for bi in b.unique():
                     # print(b, bi)
-                    mask_gti = downsampled_masks.squeeze()[b == bi]
+                    index = b == bi
+                    bm, am, gjm, gim = b[index], a[index], gj[index], gi[index]
+                    mask_gti = downsampled_masks.squeeze()[index]
                     mask_gti = mask_gti.permute(1, 2, 0).contiguous()
-                    psi = ps[b == bi]
-                    pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
+                    mxywh = xywh[i][index]
+                    mw, mh = mxywh[:, 2:].T
+                    mw, mh = mw / pi.shape[3], pi.shape[2]
+                    # print(mxywh.shape)
+                    mxywh = mxywh / torch.tensor(
+                        pi.shape,
+                        device=mxywh.device)[[3, 2, 3, 2]] * torch.tensor(
+                            [mask_w, mask_h, mask_w, mask_h],
+                            device=mxywh.device)  # psi = ps[b == bi]
+                    mxyxy = xywh2xyxy(mxywh)
+                    psi = mi[bm, am, gjm, gim]
+                    np.savetxt(
+                        f'mask_c/{savei}.txt',
+                        # pred_maski[:, :, 0].sigmoid().cpu().detach().numpy())
+                        psi.tanh().cpu().detach().numpy())
+                    # pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
+                    pred_maski = proto_out[bi] @ psi.tanh().T
+                    pred_maski = pred_maski.sigmoid()
+                    pred_maski = crop(pred_maski, mxyxy)
+                    savei += 1
                     # print(pred_maski)
                     # print(mask_gti.shape)
+                    # print(mask_gti[mask_gti > 0])
                     # cv2.imshow(
                     #     'p',
                     #     mask_gti[:, :, 0].cpu().numpy().astype(np.uint8) * 255)
                     # if cv2.waitKey(0) == ord('q'):
                     #     exit()
-                    lseg += F.binary_cross_entropy_with_logits(
-                        pred_maski, mask_gti, reduction='mean')
+                    lseg_ = F.binary_cross_entropy(pred_maski,
+                                                   mask_gti,
+                                                   reduction='none')
+                    # print(lseg_.shape)
+                    lseg_ = lseg_.mean(dim=(0, 1)) / mw / mh
+                    lseg += torch.mean(lseg_)
                     # lseg += self.BCEcls(pred_maski, mask_gti)
 
                 # Append targets to text file
@@ -356,7 +383,7 @@ class ComputeLoss:
         lbox *= self.hyp['box']
         lobj *= self.hyp['obj']
         lcls *= self.hyp['cls']
-        lseg *= self.hyp['box']
+        lseg *= 2
         bs = tobj.shape[0]  # batch size
 
         loss = lbox + lobj + lcls + lseg
@@ -365,7 +392,7 @@ class ComputeLoss:
     def build_targets_(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
         na, nt = self.na, targets.shape[0]  # number of anchors, targets
-        tcls, tbox, indices, anch, tidxs = [], [], [], [], []
+        tcls, tbox, indices, anch, tidxs, xywh = [], [], [], [], [], []
         gain = torch.ones(
             8, device=targets.device)  # normalized to gridspace gain
         ai = torch.arange(na,
@@ -446,5 +473,6 @@ class ComputeLoss:
             anch.append(anchors[a])  # anchors
             tcls.append(c)  # class
             tidxs.append(tidx)
+            xywh.append(torch.cat((gxy, gwh), 1))
 
-        return tcls, tbox, indices, anch, tidxs
+        return tcls, tbox, indices, anch, tidxs, xywh

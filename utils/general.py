@@ -589,14 +589,15 @@ def non_max_suppression_(prediction,
                          classes=None,
                          agnostic=False,
                          multi_label=False,
-                         labels=()):
+                         labels=(),
+                         mask_out=[]):
     """Runs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
          list of detections, on (n,6) tensor per image [xyxy, conf, cls]
     """
 
-    nc = prediction.shape[2] - 5 - 32  # number of classes
+    nc = prediction.shape[2]  # number of classes
     xc = prediction[..., 4] > conf_thres  # candidates
 
     # Settings
@@ -611,13 +612,14 @@ def non_max_suppression_(prediction,
 
     t = time.time()
     output = [torch.zeros(
-        (0, 38), device=prediction.device)] * prediction.shape[0]
+        (0, 6), device=prediction.device)] * prediction.shape[0]
+    mask_output = [torch.zeros(
+        (0, 32), device=prediction.device)] * prediction.shape[0]
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
         # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
         x = x[xc[xi]]  # confidence
-        pred_masks = x[:, 5:37]
-
+        pred_masks = mask_out[xi]
         # Cat apriori labels if autolabelling
         if labels and len(labels[xi]):
             l = labels[xi]
@@ -632,7 +634,7 @@ def non_max_suppression_(prediction,
             continue
 
         # Compute conf
-        x[:, 37:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
@@ -640,12 +642,10 @@ def non_max_suppression_(prediction,
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
             i, j = (x[:, 37:] > conf_thres).nonzero(as_tuple=False).T
-            x = torch.cat((box[i], x[i, j + 37,
-                                     None], j[:, None].float(), pred_masks[i]),
-                          1)
+            x = torch.cat((box[i], x[i, j + 5, None], j[:, None].float()), 1)
         else:  # best class only
-            conf, j = x[:, 37:].max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float(), pred_masks),
+            conf, j = x[:, 5:].max(1, keepdim=True)
+            x = torch.cat((box, conf, j.float()),
                           1)[conf.view(-1) > conf_thres]
 
         # Filter by class
@@ -682,12 +682,13 @@ def non_max_suppression_(prediction,
                 i = i[iou.sum(1) > 1]  # require redundancy
 
         output[xi] = x[i]
+        mask_output[xi] = pred_masks[i]
         if (time.time() - t) > time_limit:
             print(f'WARNING: NMS time limit {time_limit}s exceeded')
             break  # time limit exceeded
 
     # return output, output_masks
-    return output
+    return output, mask_output
 
 
 def process_mask(proto_out, out_masks, bboxes, shape):
@@ -701,20 +702,20 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     # print(proto_out.dtype)
     # print(out_masks.dtype)
     # print(proto_out)
-    # print('out_masks:', out_masks.tanh())
-    masks = proto_out.float().permute(1, 2,
-                                      0).contiguous() @ out_masks.tanh().T
+    print('out_masks:', out_masks.tanh())
+    masks = proto_out.float().permute(
+        1, 2, 0).contiguous() @ out_masks.float().tanh().T
     # print(masks)
     masks = masks.sigmoid()
     # print('after sigmoid:', masks)
     masks = masks.permute(2, 0, 1).contiguous()
     # [n, mask_h, mask_w]
     masks = F.interpolate(masks.unsqueeze(0), shape, mode='nearest').squeeze(0)
-    # masks = crop(masks.permute(1, 2, 0), bboxes)
-    # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
+    masks = crop(masks.permute(1, 2, 0), bboxes)
+    # return masks.gt_(0.005).permute(2, 0, 1).contiguous()
     # masks = torch.where(masks > 0, 1., 0.)
-    # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
-    return masks.gt_(0.005)
+    return masks.gt_(0.5).permute(2, 0, 1).contiguous()
+    # return masks  # gt_(0.5)
 
 
 def crop(masks, boxes):

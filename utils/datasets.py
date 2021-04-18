@@ -219,7 +219,7 @@ class LoadImages:  # for inference
             print(f'image {self.count}/{self.nf} {path}: ', end='')
 
         # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride)[0]
+        img = letterbox(img0, self.img_size, stride=self.stride, auto=False)[0]
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -803,8 +803,8 @@ def hist_equalize(img, clahe=True, bgr=False):
         c = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         yuv[:, :, 0] = c.apply(yuv[:, :, 0])
     else:
-        yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :,
-                                            0])  # equalize Y channel histogram
+        yuv[:, :, 0] = cv2.equalizeHist(
+            yuv[:, :, 0])  # equalize Y channel histogram
     return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR if bgr else
                         cv2.COLOR_YUV2RGB)  # convert YUV image to RGB
 
@@ -840,8 +840,8 @@ def load_mosaic(self, index):
             x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
             x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
 
-        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b,
-                                     x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
+        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:
+                                     x2b]  # img4[ymin:ymax, xmin:xmax]
         padw = x1a - x1b
         padh = y1a - y1b
 
@@ -926,8 +926,8 @@ def load_mosaic9(self, index):
         segments9.extend(segments)
 
         # Image
-        img9[y1:y2, x1:x2] = img[y1 - pady:,
-                                 x1 - padx:]  # img9[ymin:ymax, xmin:xmax]
+        img9[y1:y2, x1:x2] = img[y1 - pady:, x1 -
+                                 padx:]  # img9[ymin:ymax, xmin:xmax]
         hp, wp = h, w  # height, width previous
 
     # Offset
@@ -973,8 +973,8 @@ def replicate(img, labels):
         yc, xc = int(random.uniform(0, h - bh)), int(random.uniform(
             0, w - bw))  # offset x, y
         x1a, y1a, x2a, y2a = [xc, yc, xc + bw, yc + bh]
-        img[y1a:y2a, x1a:x2a] = img[y1b:y2b,
-                                    x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
+        img[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:
+                                    x2b]  # img4[ymin:ymax, xmin:xmax]
         labels = np.append(labels, [[labels[i, 0], x1a, y1a, x2a, y2a]],
                            axis=0)
 
@@ -1195,11 +1195,7 @@ def random_perspective(img,
     return img, targets
 
 
-def box_candidates(box1,
-                   box2,
-                   wh_thr=2,
-                   ar_thr=20,
-                   area_thr=0.1,
+def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1,
                    eps=1e-16):  # box1(4,n), box2(4,n)
     # Compute candidate boxes: box1 before augment, box2 after augment, wh_thr (pixels), aspect_ratio_thr, area_ratio
     w1, h1 = box1[2] - box1[0], box1[3] - box1[1]
@@ -1247,8 +1243,9 @@ def cutout(image, labels):
         ymax = min(h, ymin + mask_h)
 
         # apply random color mask
-        image[ymin:ymax,
-              xmin:xmax] = [random.randint(64, 191) for _ in range(3)]
+        image[ymin:ymax, xmin:xmax] = [
+            random.randint(64, 191) for _ in range(3)
+        ]
 
         # return unobscured labels
         if len(labels) and s > 0.03:
@@ -1275,7 +1272,7 @@ def flatten_recursive(path='../coco128'):
 
 
 def extract_boxes(
-    path='../coco128/'
+        path='../coco128/'
 ):  # from utils.datasets import *; extract_boxes('../coco128')
     # Convert detection dataset into classification dataset, with one directory per class
 
@@ -1314,13 +1311,12 @@ def extract_boxes(
                     b[[0, 2]] = np.clip(b[[0, 2]], 0,
                                         w)  # clip boxes outside of image
                     b[[1, 3]] = np.clip(b[[1, 3]], 0, h)
-                    assert cv2.imwrite(str(f),
-                                       im[b[1]:b[3],
-                                          b[0]:b[2]]), f'box failure in {f}'
+                    assert cv2.imwrite(
+                        str(f),
+                        im[b[1]:b[3], b[0]:b[2]]), f'box failure in {f}'
 
 
-def autosplit(path='../coco128',
-              weights=(0.9, 0.1, 0.0),
+def autosplit(path='../coco128', weights=(0.9, 0.1, 0.0),
               annotated_only=False):
     """ Autosplit a dataset into train/val/test splits and save path/autosplit_*.txt files
     Usage: from utils.datasets import *; autosplit('../coco128')

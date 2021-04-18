@@ -79,7 +79,7 @@ class DetectSegment(nn.Module):
         super(DetectSegment, self).__init__()
         self.nc = nc  # number of classes
         self.mask_dim = 32
-        self.no = nc + 5 + self.mask_dim  # number of outputs per anchor
+        self.no = nc + 5  #  + self.mask_dim  # number of outputs per anchor
         self.nl = len(anchors)  # number of detection layers
         self.na = len(anchors[0]) // 2  # number of anchors
         self.grid = [torch.zeros(1)] * self.nl  # init grid
@@ -90,26 +90,35 @@ class DetectSegment(nn.Module):
                                             2))  # shape(nl,1,na,1,1,2)
         self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1)
                                for x in ch)  # output conv
+        self.mask_head = nn.ModuleList(
+            nn.Conv2d(x, self.mask_dim * self.na, 1)
+            for x in ch)  # output conv
+
         self.proto_net = nn.Sequential(
             nn.Conv2d(ch[0], 256, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(), nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(),
-            nn.Conv2d(256, self.mask_dim, kernel_size=1, padding=0),
-            nn.LeakyReLU())
+            nn.ReLU(), nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(), nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(), nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
+            nn.Conv2d(256, self.mask_dim, kernel_size=1, padding=0), nn.ReLU())
 
     def forward(self, x):
         # x = x.copy()  # for profiling
         z = []  # inference output
         self.training |= self.export
         proto_out = None
+        mask_out = []
+        # print(self.m[0].weight.shape)
+        # print(self.m[0].weight[:5])
         for i in range(self.nl):
             if i == 0:
                 proto_out = self.proto_net(x[i])
+            mask_out.append(self.mask_head[i](x[i]))
+            bs, _, ny, nx = mask_out[
+                i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
+            mask_out[i] = mask_out[i].view(bs, self.na, self.mask_dim, ny,
+                                           nx).permute(0, 1, 3, 4,
+                                                       2).contiguous()
             x[i] = self.m[i](x[i])  # conv
             bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
             x[i] = x[i].view(bs, self.na, self.no, ny,
@@ -125,8 +134,9 @@ class DetectSegment(nn.Module):
                 y[..., 2:4] = (y[..., 2:4] * 2)**2 * self.anchor_grid[i]  # wh
                 z.append(y.view(bs, -1, self.no))
 
-        return (x, proto_out) if self.training else (torch.cat(z, 1), x,
-                                                     proto_out)
+        return (x, proto_out, mask_out) if self.training else (
+            torch.cat(z, 1), x, proto_out,
+            torch.cat([m.view(bs, -1, self.mask_dim) for m in mask_out], 1))
 
     @staticmethod
     def _make_grid(nx=20, ny=20):
@@ -135,10 +145,7 @@ class DetectSegment(nn.Module):
 
 
 class Model(nn.Module):
-    def __init__(self,
-                 cfg='yolov5s.yaml',
-                 ch=3,
-                 nc=None,
+    def __init__(self, cfg='yolov5s.yaml', ch=3, nc=None,
                  anchors=None):  # model, input channels, number of classes
         super(Model, self).__init__()
         if isinstance(cfg, dict):
@@ -250,10 +257,10 @@ class Model(nn.Module):
             b = mi.bias.view(m.na, -1)  # conv.bias(255) to (3,85)
             b.data[:, 4] += math.log(
                 8 / (640 / s)**2)  # obj (8 objects per 640 image)
-            b.data[:,
-                   5:] += math.log(0.6 /
-                                   (m.nc - 0.99)) if cf is None else torch.log(
-                                       cf / cf.sum())  # cls
+            b.data[:, 5:] += math.log(
+                0.6 /
+                (m.nc - 0.99)) if cf is None else torch.log(cf /
+                                                            cf.sum())  # cls
             mi.bias = torch.nn.Parameter(b.view(-1), requires_grad=True)
 
     def _print_biases(self):

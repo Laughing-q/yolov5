@@ -86,5 +86,11 @@ print(b.shape)
 # print(a @ b)
 print(torch.mm(b, a))
 
-plot_results(save_dir='/d/projects/research/yolov5/runs/train/seg200/',
-             mask_head=True)
+# plot_results(save_dir='/d/projects/research/yolov5/runs/train/seg200/',
+#              mask_head=True)
+
+a = torch.tensor([1, 2, 3, 4, 5, 6, 7, 8, 8])
+b = a[a > 5][1]
+print(b)
+a[a > 5][1] = 1
+print(a)
