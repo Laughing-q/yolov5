@@ -10,8 +10,8 @@ from numpy import random
 from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression_, apply_classifier, \
-    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, process_mask
-from utils.plots import plot_one_box
+    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, process_mask, scale_masks
+from utils.plots import plot_one_box, plot_one_mask
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 import numpy as np
 
@@ -81,15 +81,15 @@ def detect(save_img=False):
 
         # Inference
         t1 = time_synchronized()
-        pred, _, proto_out, mask_out = model(img, augment=opt.augment)
+        pred, _, proto_out = model(img, augment=opt.augment)
 
         # Apply NMS
-        pred, mask_output = non_max_suppression_(pred,
-                                                 opt.conf_thres,
-                                                 opt.iou_thres,
-                                                 classes=opt.classes,
-                                                 agnostic=opt.agnostic_nms,
-                                                 mask_out=mask_out)
+        pred = non_max_suppression_(pred,
+                                    opt.conf_thres,
+                                    opt.iou_thres,
+                                    classes=opt.classes,
+                                    agnostic=opt.agnostic_nms,
+                                    mask_out=[])
         t2 = time_synchronized()
 
         # Apply Classifier
@@ -97,9 +97,7 @@ def detect(save_img=False):
             pred = apply_classifier(pred, modelc, img, im0s)
 
         # Process detections
-        for i, (det,
-                mask) in enumerate(zip(pred,
-                                       mask_output)):  # detections per image
+        for i, det in enumerate(pred):  # detections per image
             if webcam:  # batch_size >= 1
                 p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(
                 ), dataset.count
@@ -114,19 +112,21 @@ def detect(save_img=False):
             gn = torch.tensor(im0.shape)[[1, 0, 1,
                                           0]]  # normalization gain whwh
             if len(det):
-                print('det:', det.shape)
-                out_masks = mask  # [img_h, img_w, num]
+                # print('det:', det.shape)
+                out_masks = det[:, 6:]  # [img_h, img_w, num]
                 masks = process_mask(proto_out[i], out_masks, det[:, :4],
                                      img.shape[2:])
+                masks = scale_masks(img.shape[2:], masks, im0.shape)
                 # print(masks.shape)
                 # np.save(p.name + '.npy', masks.cpu().numpy())
-                for mi in masks.cpu().numpy():
-                    # print((mi > 0).all())
-                    print(mi[mi > 0])
-                    # exit()
-                    cv2.imshow('p', mi * 255)
-                    if cv2.waitKey(0) == ord('q'):
-                        exit()
+                # for mi in masks.cpu().numpy():
+                #     # print(mi.max())
+                #     # print(mi.min())
+                #     # print(mi[mi > 0])
+                #     # exit()
+                #     cv2.imshow('p', mi * 255)
+                #     if cv2.waitKey(0) == ord('q'):
+                #         exit()
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4],
                                           im0.shape).round()
@@ -138,7 +138,7 @@ def detect(save_img=False):
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "
 
                 # Write results
-                for *xyxy, conf, cls in reversed(det[:, :6]):
+                for i, (*xyxy, conf, cls) in enumerate(reversed(det[:, :6])):
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) /
                                 gn).view(-1).tolist()  # normalized xywh
@@ -154,6 +154,11 @@ def detect(save_img=False):
                                      label=label,
                                      color=colors[int(cls)],
                                      line_thickness=3)
+                        # print(im0.shape)
+                        # print(masks[:, :, i].shape)
+                        im0 = plot_one_mask(im0,
+                                            color=None,
+                                            masks=masks[:, :, i])
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -199,12 +204,12 @@ if __name__ == '__main__':
         nargs='+',
         type=str,
         default=
-        '/home/laughing/code/yolov5/runs/train/seg50_relu251/weights/best.pt',
+        '/d/projects/research/yolov5/runs/train/seg50_relu250/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',
         type=str,
-        default='/home/laughing/code/yolov5/data/balloon/images/val',
+        default='/d/projects/research/yolov5/data/balloon/images/val',
         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size',
                         type=int,

@@ -383,6 +383,30 @@ def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     return coords
 
 
+def scale_masks(img1_shape, masks, img0_shape, ratio_pad=None):
+    """
+    img1: model input shape
+    img0: origin pic shape
+    masks: [h, w, num]
+    """
+    # Rescale coords (xyxy) from img1_shape to img0_shape
+    if ratio_pad is None:  # calculate from img0_shape
+        gain = min(img1_shape[0] / img0_shape[0],
+                   img1_shape[1] / img0_shape[1])  # gain  = old / new
+        pad = (img1_shape[1] - img0_shape[1] * gain) / 2, (
+            img1_shape[0] - img0_shape[0] * gain) / 2  # wh padding
+    else:
+        gain = ratio_pad[0][0]
+        pad = ratio_pad[1]
+    tl_pad = int(pad[1]), int(pad[0])  # y, x
+    br_pad = int(img1_shape[0] - pad[1]), int(img1_shape[1] - pad[0])
+    masks = masks[tl_pad[0]:br_pad[0], tl_pad[1]:br_pad[1], :]
+    # print(type(masks))
+    masks = cv2.resize(masks.cpu().numpy(), (img0_shape[1], img0_shape[0]))
+
+    return masks if len(masks.shape) == 3 else masks[:, :, None]
+
+
 def clip_coords(boxes, img_shape):
     # Clip bounding xyxy bounding boxes to image shape (height, width)
     boxes[:, 0].clamp_(0, img_shape[1])  # x1
@@ -597,7 +621,7 @@ def non_max_suppression_(prediction,
          list of detections, on (n,6) tensor per image [xyxy, conf, cls]
     """
 
-    nc = prediction.shape[2]  # number of classes
+    nc = prediction.shape[2] - 5 - 32  # number of classes
     xc = prediction[..., 4] > conf_thres  # candidates
 
     # Settings
@@ -612,14 +636,15 @@ def non_max_suppression_(prediction,
 
     t = time.time()
     output = [torch.zeros(
-        (0, 6), device=prediction.device)] * prediction.shape[0]
-    mask_output = [torch.zeros(
-        (0, 32), device=prediction.device)] * prediction.shape[0]
+        (0, 38), device=prediction.device)] * prediction.shape[0]
+    # mask_output = [torch.zeros(
+    #     (0, 32), device=prediction.device)] * prediction.shape[0]
     for xi, x in enumerate(prediction):  # image index, image inference
         # Apply constraints
         # x[((x[..., 2:4] < min_wh) | (x[..., 2:4] > max_wh)).any(1), 4] = 0  # width-height
         x = x[xc[xi]]  # confidence
-        pred_masks = mask_out[xi]
+        # pred_masks = mask_out[xi]
+        pred_masks = x[:, 5:37]
         # Cat apriori labels if autolabelling
         if labels and len(labels[xi]):
             l = labels[xi]
@@ -642,10 +667,12 @@ def non_max_suppression_(prediction,
         # Detections matrix nx6 (xyxy, conf, cls)
         if multi_label:
             i, j = (x[:, 37:] > conf_thres).nonzero(as_tuple=False).T
-            x = torch.cat((box[i], x[i, j + 5, None], j[:, None].float()), 1)
+            x = torch.cat((box[i], x[i, j + 37,
+                                     None], j[:, None].float(), pred_masks[i]),
+                          1)
         else:  # best class only
-            conf, j = x[:, 5:].max(1, keepdim=True)
-            x = torch.cat((box, conf, j.float()),
+            conf, j = x[:, 37:].max(1, keepdim=True)
+            x = torch.cat((box, conf, j.float(), pred_masks),
                           1)[conf.view(-1) > conf_thres]
 
         # Filter by class
@@ -682,13 +709,13 @@ def non_max_suppression_(prediction,
                 i = i[iou.sum(1) > 1]  # require redundancy
 
         output[xi] = x[i]
-        mask_output[xi] = pred_masks[i]
+        # mask_output[xi] = pred_masks[i]
         if (time.time() - t) > time_limit:
             print(f'WARNING: NMS time limit {time_limit}s exceeded')
             break  # time limit exceeded
 
     # return output, output_masks
-    return output, mask_output
+    return output  # , mask_output
 
 
 def process_mask(proto_out, out_masks, bboxes, shape):
@@ -702,7 +729,7 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     # print(proto_out.dtype)
     # print(out_masks.dtype)
     # print(proto_out)
-    print('out_masks:', out_masks.tanh())
+    # print('out_masks:', out_masks.tanh())
     masks = proto_out.float().permute(
         1, 2, 0).contiguous() @ out_masks.float().tanh().T
     # print(masks)
@@ -711,11 +738,11 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     masks = masks.permute(2, 0, 1).contiguous()
     # [n, mask_h, mask_w]
     masks = F.interpolate(masks.unsqueeze(0), shape, mode='nearest').squeeze(0)
-    # masks = crop(masks.permute(1, 2, 0), bboxes)
+    masks = crop(masks.permute(1, 2, 0), bboxes)
     # return masks.gt_(0.005).permute(2, 0, 1).contiguous()
     # masks = torch.where(masks > 0, 1., 0.)
-    # return masks.permute(2, 0, 1).contiguous()
-    return masks  # gt_(0.5)
+    # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
+    return masks.gt_(0.5)  # .gt_(0.2)
 
 
 def crop(masks, boxes):

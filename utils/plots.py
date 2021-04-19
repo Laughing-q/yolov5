@@ -76,6 +76,14 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=3):
                     lineType=cv2.LINE_AA)
 
 
+def plot_one_mask(img0, color, masks):
+    color = np.array([0, 0, 255], dtype=np.uint8)
+    bbox_mask = masks.astype(np.bool)
+
+    img0[bbox_mask] = img0[bbox_mask] * 0 + color * 1
+    return img0
+
+
 def plot_one_box_PIL(box, img, color=None, label=None, line_thickness=None):
     img = Image.fromarray(img)
     draw = ImageDraw.Draw(img)
@@ -275,6 +283,8 @@ def plot_images_(images,
         mosaic[block_y:block_y + h, block_x:block_x + w, :] = img
         if len(targets) > 0:
             image_targets = targets[targets[:, 0] == i]
+            # print(targets.shape)
+            # print(masks.shape)
             image_masks = masks[targets[:, 0] == i]
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
             classes = image_targets[:, 1].astype('int')
@@ -296,7 +306,7 @@ def plot_images_(images,
                 cls = names[cls] if names else cls
                 mask = image_masks[j].astype(np.bool)
                 mosaic[mask] = mosaic[mask] * 0.5 + (
-                    np.array(color, dtype=np.uint8) * 0.5)
+                    np.array([255, 0, 0], dtype=np.uint8) * 0.5)
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = '%s' % cls if labels else '%s %.1f' % (cls,
                                                                    conf[j])
@@ -535,8 +545,9 @@ def profile_idetection(start=0, stop=0, labels=(), save_dir=''):
     files = list(Path(save_dir).glob('frames*.txt'))
     for fi, f in enumerate(files):
         try:
-            results = np.loadtxt(
-                f, ndmin=2).T[:, 90:-30]  # clip first and last rows
+            results = np.loadtxt(f,
+                                 ndmin=2).T[:,
+                                            90:-30]  # clip first and last rows
             n = results.shape[1]  # number of rows
             x = np.arange(start, min(stop, n) if stop else n)
             results = results[:, x]

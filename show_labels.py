@@ -25,12 +25,13 @@ with open('data/hyp.scratch.yaml') as f:
 # dataset = LoadImagesAndLabels('data/play_phone1216/images/train', img_size=640, augment=True, cache_images=False,
 #                               hyp=hyp)
 dataset = LoadImagesAndLabelsAndMasks(
-    '/home/laughing/code/yolov5/data/balloon/images/val',
+    '/d/projects/research/yolov5/data/balloon/images/',
     img_size=640,
-    augment=False,
+    augment=True,
     cache_images=False,
     hyp=hyp,
 )
+dataset.mosaic = True
 
 save = False
 save_dir = '/d/projects/yolov5/data/play_phone0115/show_labels'
@@ -49,20 +50,7 @@ cv2.namedWindow('mosaic', cv2.WINDOW_NORMAL)
 for i, (imgs, targets, paths, _, masks) in enumerate(dataloader):
     # for i, (imgs, targets, paths, _) in enumerate(dataset):
     #     print(targets)
-    if '24631331976_defa3bb61f_k' not in paths[0]:
-        continue
-    print(paths)
-    pred = np.load(paths[0].split('/')[-1] + '.npy')
-    print(pred.shape)
-    print(pred[pred > 0.5])
-    print(masks.shape)
-    loss = F.binary_cross_entropy(torch.from_numpy(pred),
-                                  masks,
-                                  reduction='none').mean(
-                                      dim=(1, 2))  #  / 640 / 640
-    print(loss.shape)
-    print(loss)
-
+    # print(targets)
     result = plot_images_(images=imgs,
                           targets=targets,
                           paths=paths,

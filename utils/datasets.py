@@ -803,8 +803,8 @@ def hist_equalize(img, clahe=True, bgr=False):
         c = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         yuv[:, :, 0] = c.apply(yuv[:, :, 0])
     else:
-        yuv[:, :, 0] = cv2.equalizeHist(
-            yuv[:, :, 0])  # equalize Y channel histogram
+        yuv[:, :, 0] = cv2.equalizeHist(yuv[:, :,
+                                            0])  # equalize Y channel histogram
     return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR if bgr else
                         cv2.COLOR_YUV2RGB)  # convert YUV image to RGB
 
@@ -840,14 +840,17 @@ def load_mosaic(self, index):
             x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
             x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
 
-        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:
-                                     x2b]  # img4[ymin:ymax, xmin:xmax]
+        img4[y1a:y2a, x1a:x2a] = img[y1b:y2b,
+                                     x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
         padw = x1a - x1b
         padh = y1a - y1b
 
         # Labels
         labels, segments = self.labels[index].copy(
         ), self.segments[index].copy()
+        # if i == 1:
+        #     print(segments)
+        #     print(index)
         if labels.size:
             labels[:, 1:] = xywhn2xyxy(
                 labels[:, 1:], w, h, padw,
@@ -863,7 +866,9 @@ def load_mosaic(self, index):
     # img4, labels4 = replicate(img4, labels4)  # replicate
 
     # Augment
-    img4, labels4 = random_perspective(
+    # print(segments4)
+    # print(labels4)
+    img4, labels4, segments4 = random_perspective(
         img4,
         labels4,
         segments4,
@@ -873,8 +878,10 @@ def load_mosaic(self, index):
         shear=self.hyp['shear'],
         perspective=self.hyp['perspective'],
         border=self.mosaic_border)  # border to remove
+    # print(segments4)
+    # print(labels4)
 
-    return img4, labels4
+    return img4, labels4, segments4
 
 
 def load_mosaic9(self, index):
@@ -926,8 +933,8 @@ def load_mosaic9(self, index):
         segments9.extend(segments)
 
         # Image
-        img9[y1:y2, x1:x2] = img[y1 - pady:, x1 -
-                                 padx:]  # img9[ymin:ymax, xmin:xmax]
+        img9[y1:y2, x1:x2] = img[y1 - pady:,
+                                 x1 - padx:]  # img9[ymin:ymax, xmin:xmax]
         hp, wp = h, w  # height, width previous
 
     # Offset
@@ -973,8 +980,8 @@ def replicate(img, labels):
         yc, xc = int(random.uniform(0, h - bh)), int(random.uniform(
             0, w - bw))  # offset x, y
         x1a, y1a, x2a, y2a = [xc, yc, xc + bw, yc + bh]
-        img[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:
-                                    x2b]  # img4[ymin:ymax, xmin:xmax]
+        img[y1a:y2a, x1a:x2a] = img[y1b:y2b,
+                                    x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
         labels = np.append(labels, [[labels[i, 0], x1a, y1a, x2a, y2a]],
                            axis=0)
 
@@ -1152,8 +1159,10 @@ def random_perspective(img,
     if n:
         use_segments = any(x.any() for x in segments)
         new = np.zeros((n, 4))
+        new_segments = []
         if use_segments:  # warp segments
-            segments = resample_segments(segments)  # upsample
+            # print(segments)
+            segments = resample_segments(segments, n=50)  # upsample
             for i, segment in enumerate(segments):
                 xy = np.ones((len(segment), 3))
                 xy[:, :2] = segment
@@ -1165,6 +1174,7 @@ def random_perspective(img,
 
                 # clip
                 new[i] = segment2box(xy, width, height)
+                new_segments.append(xy)
 
         else:  # warp boxes
             xy = np.ones((n * 4, 3))
@@ -1191,11 +1201,21 @@ def random_perspective(img,
                            area_thr=0.01 if use_segments else 0.10)
         targets = targets[i]
         targets[:, 1:5] = new[i]
+        new_segments = np.array(new_segments)[i] if len(
+            new_segments) else np.array(new_segments)
+    if use_segments:
+        return img, targets, new_segments
+    else:
+        return img, targets
 
-    return img, targets
+    # return img, targets, new_segments if use_segments else img, targets
 
 
-def box_candidates(box1, box2, wh_thr=2, ar_thr=20, area_thr=0.1,
+def box_candidates(box1,
+                   box2,
+                   wh_thr=2,
+                   ar_thr=20,
+                   area_thr=0.1,
                    eps=1e-16):  # box1(4,n), box2(4,n)
     # Compute candidate boxes: box1 before augment, box2 after augment, wh_thr (pixels), aspect_ratio_thr, area_ratio
     w1, h1 = box1[2] - box1[0], box1[3] - box1[1]
@@ -1243,9 +1263,8 @@ def cutout(image, labels):
         ymax = min(h, ymin + mask_h)
 
         # apply random color mask
-        image[ymin:ymax, xmin:xmax] = [
-            random.randint(64, 191) for _ in range(3)
-        ]
+        image[ymin:ymax,
+              xmin:xmax] = [random.randint(64, 191) for _ in range(3)]
 
         # return unobscured labels
         if len(labels) and s > 0.03:
@@ -1272,7 +1291,7 @@ def flatten_recursive(path='../coco128'):
 
 
 def extract_boxes(
-        path='../coco128/'
+    path='../coco128/'
 ):  # from utils.datasets import *; extract_boxes('../coco128')
     # Convert detection dataset into classification dataset, with one directory per class
 
@@ -1311,12 +1330,13 @@ def extract_boxes(
                     b[[0, 2]] = np.clip(b[[0, 2]], 0,
                                         w)  # clip boxes outside of image
                     b[[1, 3]] = np.clip(b[[1, 3]], 0, h)
-                    assert cv2.imwrite(
-                        str(f),
-                        im[b[1]:b[3], b[0]:b[2]]), f'box failure in {f}'
+                    assert cv2.imwrite(str(f),
+                                       im[b[1]:b[3],
+                                          b[0]:b[2]]), f'box failure in {f}'
 
 
-def autosplit(path='../coco128', weights=(0.9, 0.1, 0.0),
+def autosplit(path='../coco128',
+              weights=(0.9, 0.1, 0.0),
               annotated_only=False):
     """ Autosplit a dataset into train/val/test splits and save path/autosplit_*.txt files
     Usage: from utils.datasets import *; autosplit('../coco128')
@@ -1509,6 +1529,7 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]
+
                         if any([len(x) > 8 for x in l]):  # is segment
                             classes = np.array([x[0] for x in l],
                                                dtype=np.float32)
@@ -1517,6 +1538,10 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                                          dtype=np.float32).reshape(-1, 2)
                                 for x in l
                             ]  # (cls, xy1...)
+                            # if '154446334_5d41cd1375_b' in lb_file:
+                            #     print(l)
+                            #     print(lb_file)
+                            #     print(segments)
                             l = np.concatenate((classes.reshape(
                                 -1, 1), segments2boxes(segments)),
                                                1)  # (cls, xywh)
@@ -1571,9 +1596,10 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
 
         hyp = self.hyp
         mosaic = self.mosaic and random.random() < hyp['mosaic']
+        masks = []
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index)
+            img, labels, segments = load_mosaic(self, index)
             shapes = None
 
             # MixUp https://arxiv.org/pdf/1710.09412.pdf
@@ -1599,10 +1625,9 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                 (h / h0, w / w0), pad)  # for COCO mAP rescaling
 
             labels = self.labels[index].copy()
-            segments = self.segments[
-                index]  # [array, array, ....], arrat.shape=(num_points, 2), xyxyxyxy
-            masks = []
-            # print(segments)
+            segments = self.segments[index].copy(
+            )  # [array, array, ....], arrat.shape=(num_points, 2), xyxyxyxy
+            # print(len(segments))
             if len(segments):
                 for i_s in range(len(segments)):
                     segments[i_s] = xyn2xy(segments[i_s],
@@ -1610,12 +1635,6 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                                            ratio[1] * h,
                                            padw=pad[0],
                                            padh=pad[1])
-                    mask = polygon2mask2(
-                        # (int(ratio[1] * h), int(ratio[0] * w)),
-                        (shape, shape) if isinstance(shape, int) else shape,
-                        [segments[i_s].reshape(-1)])
-                    masks.append(torch.from_numpy(mask.astype(np.float32)))
-
             if labels.size:  # normalized xywh to pixel xyxy format
                 labels[:, 1:] = xywhn2xyxy(labels[:, 1:],
                                            ratio[0] * w,
@@ -1626,9 +1645,10 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
         if self.augment:
             # Augment imagespace
             if not mosaic:
-                img, labels = random_perspective(
+                img, labels, segments = random_perspective(
                     img,
                     labels,
+                    segments=segments,
                     degrees=hyp['degrees'],
                     translate=hyp['translate'],
                     scale=hyp['scale'],
@@ -1650,19 +1670,26 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
             labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
             labels[:, [2, 4]] /= img.shape[0]  # normalized height 0-1
             labels[:, [1, 3]] /= img.shape[1]  # normalized width 0-1
+            for si in range(len(segments)):
+                mask = polygon2mask2(
+                    # (int(ratio[1] * h), int(ratio[0] * w)),
+                    # (shape, shape) if isinstance(shape, int) else shape,
+                    img.shape[:2],
+                    [segments[si].reshape(-1)])
+                masks.append(torch.from_numpy(mask.astype(np.float32)))
 
-        if self.augment:
-            # flip up-down
-            if random.random() < hyp['flipud']:
-                img = np.flipud(img)
-                if nL:
-                    labels[:, 2] = 1 - labels[:, 2]
-
-            # flip left-right
-            if random.random() < hyp['fliplr']:
-                img = np.fliplr(img)
-                if nL:
-                    labels[:, 1] = 1 - labels[:, 1]
+        # if self.augment:
+        #     # flip up-down
+        #     if random.random() < hyp['flipud']:
+        #         img = np.flipud(img)
+        #         if nL:
+        #             labels[:, 2] = 1 - labels[:, 2]
+        #
+        #     # flip left-right
+        #     if random.random() < hyp['fliplr']:
+        #         img = np.fliplr(img)
+        #         if nL:
+        #             labels[:, 1] = 1 - labels[:, 1]
 
         labels_out = torch.zeros((nL, 6))
         if nL:
@@ -1674,16 +1701,18 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
 
         return torch.from_numpy(
             img), labels_out, self.img_files[index], shapes, torch.stack(
-                masks, axis=0)
+                masks, axis=0) if len(masks) else torch.zeros(nL, 640, 640)
 
     @staticmethod
     def collate_fn(batch):
         img, label, path, shapes, masks = zip(*batch)  # transposed
+        batched_masks = torch.cat(masks, 0)
+        # print(batched_masks.shape)
+        # print('batched_masks:', (batched_masks > 0).sum())
         for i, l in enumerate(label):
             l[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(img,
-                           0), torch.cat(label,
-                                         0), path, shapes, torch.cat(masks, 0)
+        return torch.stack(img, 0), torch.cat(label,
+                                              0), path, shapes, batched_masks
 
     @staticmethod
     def collate_fn4(batch):

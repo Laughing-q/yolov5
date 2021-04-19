@@ -124,7 +124,7 @@ def train(hyp, opt, device, tb_writer=None):
             v.requires_grad = False
 
     # Optimizer
-    nbs = 8  # nominal batch size
+    nbs = 32  # nominal batch size
     accumulate = max(round(nbs / total_batch_size),
                      1)  # accumulate loss before optimizing
     hyp['weight_decay'] *= total_batch_size * accumulate / nbs  # scale weight_decay
@@ -226,7 +226,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             gs,
                                             opt,
                                             hyp=hyp,
-                                            augment=False,
+                                            augment=True,
                                             cache=opt.cache_images,
                                             rect=opt.rect,
                                             rank=rank,
@@ -357,6 +357,7 @@ def train(hyp, opt, device, tb_writer=None):
         for i, (
                 imgs, targets, paths, _, masks
         ) in pbar:  # batch -------------------------------------------------------------
+            # print(len(masks[masks > 0]))
             ni = i + nb * epoch  # number integrated batches (since train start)
             imgs = imgs.to(device, non_blocking=True).float(
             ) / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
@@ -392,37 +393,34 @@ def train(hyp, opt, device, tb_writer=None):
                                          align_corners=False)
 
             # Forward
-            # with amp.autocast(enabled=cuda):
-            #     pred = model(imgs)  # forward
-            #     loss, loss_items = compute_loss.segment_loss(
-            #         pred, targets.to(device),
-            #         masks.to(device))  # loss scaled by batch_size
-            #     if rank != -1:
-            #         loss *= opt.world_size  # gradient averaged between devices in DDP mode
-            #     if opt.quad:
-            #         loss *= 4.
-            #
-            # # Backward
-            # scaler.scale(loss).backward()
-            #
-            pred = model(imgs)  # forward
-            loss, loss_items = compute_loss.segment_loss(
-                pred, targets.to(device),
-                masks.to(device))  # loss scaled by batch_size
-            if rank != -1:
-                loss *= opt.world_size  # gradient averaged between devices in DDP mode
-            if opt.quad:
-                loss *= 4.
+            with amp.autocast(enabled=cuda):
+                pred = model(imgs)  # forward
+                loss, loss_items = compute_loss.segment_loss(
+                    pred, targets.to(device),
+                    masks.to(device))  # loss scaled by batch_size
+                if rank != -1:
+                    loss *= opt.world_size  # gradient averaged between devices in DDP mode
+                if opt.quad:
+                    loss *= 4.
+
+            # pred = model(imgs)  # forward
+            # loss, loss_items = compute_loss.segment_loss(
+            #     pred, targets.to(device),
+            #     masks.to(device))  # loss scaled by batch_size
+            # if rank != -1:
+            #     loss *= opt.world_size  # gradient averaged between devices in DDP mode
+            # if opt.quad:
+            #     loss *= 4.
 
             # Backward
-            # scaler.scale(loss).backward()
-            loss.backward()
+            scaler.scale(loss).backward()
+            # loss.backward()
 
             # Optimize
             if ni % accumulate == 0:
-                # scaler.step(optimizer)  # optimizer.step
-                # scaler.update()
-                optimizer.step()
+                scaler.step(optimizer)  # optimizer.step
+                scaler.update()
+                # optimizer.step()
                 optimizer.zero_grad()
                 if ema:
                     ema.update(model)
@@ -638,10 +636,10 @@ if __name__ == '__main__':
                         type=str,
                         default='data/hyp.scratch.yaml',
                         help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=2,
+                        default=4,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',
@@ -660,7 +658,7 @@ if __name__ == '__main__':
                         action='store_true',
                         help='only save final checkpoint')
     parser.add_argument('--notest',
-                        default=True,
+                        default=False,
                         action='store_true',
                         help='only test final epoch')
     parser.add_argument('--noautoanchor',

@@ -11,7 +11,7 @@ from utils.torch_utils import is_parallel
 
 
 def smooth_BCE(
-        eps=0.1
+    eps=0.1
 ):  # https://github.com/ultralytics/yolov3/issues/238#issuecomment-598028441
     # return positive, negative label smoothing BCE targets
     return 1.0 - 0.5 * eps, 0.5 * eps
@@ -150,9 +150,10 @@ class ComputeLoss:
                 lbox += (1.0 - iou).mean()  # iou loss
 
                 # Objectness
-                tobj[b, a, gj, gi] = (
-                    1.0 - self.gr) + self.gr * iou.detach().clamp(0).type(
-                        tobj.dtype)  # iou ratio
+                tobj[b, a, gj,
+                     gi] = (1.0 -
+                            self.gr) + self.gr * iou.detach().clamp(0).type(
+                                tobj.dtype)  # iou ratio
 
                 # Classification
                 if self.nc > 1:  # cls loss (only if multiple classes)
@@ -270,9 +271,8 @@ class ComputeLoss:
             p, targets)  # targets
 
         # Losses
-        savei = 0
-        for i, (pi, mi) in enumerate(zip(
-                p, mask_out)):  # layer index, layer predictions
+        # savei = 0
+        for i, pi in enumerate(p):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
             tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
 
@@ -290,9 +290,10 @@ class ComputeLoss:
                 lbox += (1.0 - iou).mean()  # iou loss
 
                 # Objectness
-                tobj[b, a, gj, gi] = (
-                    1.0 - self.gr) + self.gr * iou.detach().clamp(0).type(
-                        tobj.dtype)  # iou ratio
+                tobj[b, a, gj,
+                     gi] = (1.0 -
+                            self.gr) + self.gr * iou.detach().clamp(0).type(
+                                tobj.dtype)  # iou ratio
 
                 # Classification
                 if self.nc > 1:  # cls loss (only if multiple classes)
@@ -314,6 +315,7 @@ class ComputeLoss:
                 # print(pred_mask.shape)
                 # # num_pos, image_h, image_w
                 mask_gt = masks[tidxs[i]]
+                # print(len(mask_gt[mask_gt > 0]))
                 downsampled_masks = F.interpolate(
                     mask_gt[None, :],
                     (mask_h, mask_w),
@@ -342,31 +344,33 @@ class ComputeLoss:
                             [mask_w, mask_h, mask_w, mask_h],
                             device=mxywh.device)  # psi = ps[b == bi]
                     mxyxy = xywh2xyxy(mxywh)
-                    psi = mi[bm, am, gjm, gim]
-                    np.savetxt(
-                        f'mask_c/{savei}.txt',
-                        # pred_maski[:, :, 0].sigmoid().cpu().detach().numpy())
-                        psi.tanh().cpu().detach().numpy())
-                    # pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
-                    pred_maski = proto_out[bi] @ psi.tanh().T
-                    pred_maski = pred_maski.sigmoid()
-                    # pred_maski = crop(pred_maski, mxyxy)
-                    savei += 1
-                    # print(pred_maski)
+                    psi = pi[bm, am, gjm, gim]
+                    # psi.tanh().cpu().detach().numpy())
+                    pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
+                    # pred_maski = proto_out[bi] @ psi.tanh().T
+
+                    # np.savetxt(
+                    #     f'mask_c/{savei}.txt',
+                    #     pred_maski[:, :, 0].sigmoid().cpu().detach().numpy())
+
+                    # pred_maski = pred_maski.sigmoid()
+                    # savei += 1
+                    # print(pred_maski.shape)
                     # print(mask_gti.shape)
-                    # print(mask_gti[mask_gti > 0])
+                    # print(len(mask_gti[mask_gti > 0]))
                     # cv2.imshow(
                     #     'p',
                     #     mask_gti[:, :, 0].cpu().numpy().astype(np.uint8) * 255)
                     # if cv2.waitKey(0) == ord('q'):
                     #     exit()
-                    lseg_ = F.binary_cross_entropy(pred_maski,
-                                                   mask_gti,
-                                                   reduction='none')
+                    # lseg += nn.MSELoss(reduction='mean')(pred_maski, mask_gti)
+                    lseg_ = F.binary_cross_entropy_with_logits(
+                        pred_maski, mask_gti, reduction='none')
+
+                    lseg_ = crop(lseg_, mxyxy)
                     # print(lseg_.shape)
                     lseg_ = lseg_.mean(dim=(0, 1)) / mw / mh
                     lseg += torch.mean(lseg_)
-                    # lseg += self.BCEcls(pred_maski, mask_gti)
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:
@@ -383,7 +387,7 @@ class ComputeLoss:
         lbox *= self.hyp['box']
         lobj *= self.hyp['obj']
         lcls *= self.hyp['cls']
-        lseg *= 2
+        lseg *= self.hyp['box'] * 10
         bs = tobj.shape[0]  # batch size
 
         loss = lbox + lobj + lcls + lseg
