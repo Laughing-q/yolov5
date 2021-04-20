@@ -31,7 +31,7 @@ from utils.general import labels_to_class_weights, increment_path, labels_to_ima
     check_requirements, print_mutation, set_logging, one_cycle, colorstr
 from utils.google_utils import attempt_download
 from utils.loss import ComputeLoss
-from utils.plots import plot_images, plot_labels, plot_results, plot_evolution
+from utils.plots import plot_images, plot_labels, plot_results, plot_evolution, plot_images_
 from utils.torch_utils import ModelEMA, select_device, intersect_dicts, torch_distributed_zero_first, is_parallel
 from utils.wandb_logging.wandb_utils import WandbLogger, check_wandb_resume
 
@@ -439,8 +439,8 @@ def train(hyp, opt, device, tb_writer=None):
                 # Plot
                 if plots and ni < 3:
                     f = save_dir / f'train_batch{ni}.jpg'  # filename
-                    Thread(target=plot_images,
-                           args=(imgs, targets, paths, f),
+                    Thread(target=plot_images_,
+                           args=(imgs, targets, masks, paths, f),
                            daemon=True).start()
                     # if tb_writer:
                     #     tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
@@ -622,11 +622,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights',
                         type=str,
-                        default='weights/yolov5s.pt',
+                        default='weights/yolov5m.pt',
                         help='initial weights path')
     parser.add_argument('--cfg',
                         type=str,
-                        default='./models/yolov5s_seg.yaml',
+                        default='./models/yolov5m_seg.yaml',
                         help='model.yaml path')
     parser.add_argument('--data',
                         type=str,
@@ -702,7 +702,7 @@ if __name__ == '__main__':
                         help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
     parser.add_argument('--name',
-                        default='seg50_relu2',
+                        default='relu_test',
                         help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',

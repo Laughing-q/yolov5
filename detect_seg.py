@@ -204,7 +204,7 @@ if __name__ == '__main__':
         nargs='+',
         type=str,
         default=
-        '/d/projects/research/yolov5/runs/train/seg50_relu250/weights/best.pt',
+        '/d/projects/research/yolov5/runs/train/relu_mosaic/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',

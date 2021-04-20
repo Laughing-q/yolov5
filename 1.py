@@ -94,3 +94,8 @@ b = a[a > 5][1]
 print(b)
 a[a > 5][1] = 1
 print(a)
+
+a = 0
+a |= 0
+print(a)
+print(1 | 0)

@@ -5,6 +5,7 @@ from pathlib import Path
 from threading import Thread
 
 import numpy as np
+import cv2
 import torch
 import yaml
 from tqdm import tqdm
@@ -12,9 +13,9 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_, process_mask, mask_iou
 from utils.metrics import ap_per_class, ConfusionMatrix
-from utils.plots import plot_images, output_to_target, plot_study_txt
+from utils.plots import plot_images, output_to_target, plot_study_txt, plot_images_
 from utils.torch_utils import select_device, time_synchronized
 
 
@@ -119,10 +120,21 @@ def test(
     jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
     for batch_i, (img, targets, paths, shapes,
                   masks) in enumerate(tqdm(dataloader, desc=s)):
+        # # print(img.shape)
+        # result = plot_images_(images=img,
+        #                       targets=targets,
+        #                       paths=paths,
+        #                       masks=masks,
+        #                       max_size=672)
+        # cv2.imshow('mosaic', result[:, :, ::-1])
+        # if cv2.waitKey(0) == ord('q'):  # q to quit
+        #     break
+        # continue
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
         targets = targets.to(device)
+        masks = masks.to(device)
         nb, _, height, width = img.shape  # batch size, channels, height, width
 
         with torch.no_grad():
@@ -153,6 +165,7 @@ def test(
         # Statistics per image
         for si, pred in enumerate(out):
             labels = targets[targets[:, 0] == si, 1:]
+            masksi = masks[targets[:, 0] == si]
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
             path = Path(paths[si])
@@ -166,8 +179,8 @@ def test(
 
             # Predictions
             predn = pred.clone()
-            scale_coords(img[si].shape[1:], predn[:, :4], shapes[si][0],
-                         shapes[si][1])  # native-space pred
+            # scale_coords(img[si].shape[1:], predn[:, :4], shapes[si][0],
+            #              shapes[si][1])  # native-space pred
 
             # Append to text file
             if save_txt:
@@ -245,8 +258,8 @@ def test(
 
                 # target boxes
                 tbox = xywh2xyxy(labels[:, 1:5])
-                scale_coords(img[si].shape[1:], tbox, shapes[si][0],
-                             shapes[si][1])  # native-space labels
+                # scale_coords(img[si].shape[1:], tbox, shapes[si][0],
+                #              shapes[si][1])  # native-space labels
                 if plots:
                     confusion_matrix.process_batch(
                         predn, torch.cat((labels[:, 0:1], tbox), 1))
@@ -264,6 +277,24 @@ def test(
                         ious, i = box_iou(predn[pi, :4], tbox[ti]).max(
                             1)  # best ious, indices
 
+                        # n, h, w
+                        pred_maski = process_mask(proto_out[si], predn[pi, 6:],
+                                                  predn[pi, :4],
+                                                  img.shape[2:]).permute(
+                                                      2, 0, 1).contiguous()
+                        # print(masks.shape, pred_maski.shape)
+                        # for i in pred_maski:
+                        #     cv2.imshow('p', i.cpu().numpy() * 255)
+                        #     if cv2.waitKey(0) == ord('q'):
+                        #         exit()
+                        # for i in masksi:
+                        #     cv2.imshow('p', i.cpu().numpy() * 255)
+                        #     if cv2.waitKey(0) == ord('q'):
+                        #         exit()
+                        # ious, i = mask_iou(
+                        #     pred_maski.view(pred_maski.shape[0], -1),
+                        #     masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
+                        # print(ious.max())
                         # Append detections
                         detected_set = set()
                         for j in (ious > iouv[0]).nonzero(as_tuple=False):
@@ -285,12 +316,12 @@ def test(
         # Plot images
         if plots and batch_i < 3:
             f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
-            Thread(target=plot_images,
-                   args=(img, targets, paths, f, names),
+            Thread(target=plot_images_,
+                   args=(img, targets, masks, paths, f, names),
                    daemon=True).start()
             f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
-            Thread(target=plot_images,
-                   args=(img, output_to_target(out), paths, f, names),
+            Thread(target=plot_images_,
+                   args=(img, output_to_target(out), masks, paths, f, names),
                    daemon=True).start()
 
     # Compute statistics
@@ -383,7 +414,7 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default='/d/projects/research/yolov5/runs/train/exp5/weights/best.pt',
+        default='/d/projects/research/yolov5/runs/train/relu/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument('--data',
                         type=str,
@@ -391,7 +422,7 @@ if __name__ == '__main__':
                         help='*.data path')
     parser.add_argument('--batch-size',
                         type=int,
-                        default=32,
+                        default=1,
                         help='size of each image batch')
     parser.add_argument('--img-size',
                         type=int,

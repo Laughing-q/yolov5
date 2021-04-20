@@ -101,6 +101,7 @@ def create_dataloader(path,
             pad=pad,
             image_weights=image_weights,
             prefix=prefix)
+        # dataset.mosaic = False
 
     batch_size = min(batch_size, len(dataset))
     nw = min([
@@ -632,7 +633,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         mosaic = self.mosaic and random.random() < hyp['mosaic']
         if mosaic:
             # Load mosaic
-            img, labels = load_mosaic(self, index)
+            img, labels, _ = load_mosaic(self, index)
             shapes = None
 
             # MixUp https://arxiv.org/pdf/1710.09412.pdf
@@ -1162,7 +1163,7 @@ def random_perspective(img,
         new_segments = []
         if use_segments:  # warp segments
             # print(segments)
-            segments = resample_segments(segments, n=50)  # upsample
+            segments = resample_segments(segments, n=1000)  # upsample
             for i, segment in enumerate(segments):
                 xy = np.ones((len(segment), 3))
                 xy[:, :2] = segment
@@ -1472,6 +1473,8 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
             self.img_files = [self.img_files[i] for i in irect]
             self.label_files = [self.label_files[i] for i in irect]
             self.labels = [self.labels[i] for i in irect]
+            self.segments = [self.segments[i]
+                             for i in irect] if len(self.segments) else []
             self.shapes = s[irect]  # wh
             ar = ar[irect]
 

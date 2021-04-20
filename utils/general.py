@@ -469,6 +469,25 @@ def bbox_iou(box1,
         return iou  # IoU
 
 
+def mask_iou(mask1, mask2):
+    """
+    mask1: [N, n] m1 means number of predicted objects 
+    mask2: [M, n] m2 means number of gt objects
+    Note: n means image_w x image_h
+    Note: if iscrowd is True, then mask2 should be the crowd.
+
+    return: masks iou, [N, M]
+    """
+    # print(mask1.shape)
+    # print(mask2.shape)
+    intersection = torch.matmul(mask1, mask2.t())
+    area1 = torch.sum(mask1, dim=1).view(1, -1)
+    area2 = torch.sum(mask2, dim=1).view(1, -1)
+    union = (area1.t() + area2) - intersection
+
+    return intersection / union
+
+
 def box_iou(box1, box2):
     # https://github.com/pytorch/vision/blob/master/torchvision/ops/boxes.py
     """
@@ -723,11 +742,13 @@ def process_mask(proto_out, out_masks, bboxes, shape):
     proto_out: [mask_dim, mask_h, mask_w]
     out_masks: [n, mask_dim], n is number of masks after nms
     bboxes: [n, 4], n is number of masks after nms
-    shape: input_image_size, (h, w)
+    shape:input_image_size, (h, w)
+
+    return: h, w, n
     """
     # [mask_h, mask_w, n]
-    # print(proto_out.dtype)
-    # print(out_masks.dtype)
+    # print(proto_out.shape)
+    # print(out_masks.shape)
     # print(proto_out)
     # print('out_masks:', out_masks.tanh())
     masks = proto_out.float().permute(

@@ -269,6 +269,9 @@ def plot_images_(images,
     colors = color_list()  # list of colors
     mosaic = np.full((int(ns * h), int(ns * w), 3), 255,
                      dtype=np.uint8)  # init
+    mosaic_masks = np.full((len(masks), int(ns * h), int(ns * w)),
+                           255,
+                           dtype=np.uint8)
     for i, img in enumerate(images):
         if i == max_subplots:  # if last batch has fewer images than we expect
             break
@@ -286,6 +289,9 @@ def plot_images_(images,
             # print(targets.shape)
             # print(masks.shape)
             image_masks = masks[targets[:, 0] == i]
+            # mosaic_masks
+            # mosaic_masks[block_y:block_y + h,
+            #              block_x:block_x + w, :] = image_masks
             boxes = xywh2xyxy(image_targets[:, 2:6]).T
             classes = image_targets[:, 1].astype('int')
             labels = image_targets.shape[1] == 6  # labels if no conf column
@@ -305,8 +311,14 @@ def plot_images_(images,
                 color = colors[cls % len(colors)]
                 cls = names[cls] if names else cls
                 mask = image_masks[j].astype(np.bool)
-                mosaic[mask] = mosaic[mask] * 0.5 + (
-                    np.array([255, 0, 0], dtype=np.uint8) * 0.5)
+                # print(mask.shape)
+                # print(mosaic.shape)
+                mosaic[
+                    block_y:block_y + h, block_x:block_x +
+                    w, :][mask] = mosaic[block_y:block_y + h, block_x:block_x +
+                                         w, :][mask] * 0.35 + (np.array(
+                                             [255, 0, 0], dtype=np.uint8) *
+                                                               0.65)
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = '%s' % cls if labels else '%s %.1f' % (cls,
                                                                    conf[j])

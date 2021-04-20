@@ -272,6 +272,7 @@ class ComputeLoss:
 
         # Losses
         # savei = 0
+        total_pos = 0
         for i, pi in enumerate(p):  # layer index, layer predictions
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
             tobj = torch.zeros_like(pi[..., 0], device=device)  # target obj
@@ -331,6 +332,7 @@ class ComputeLoss:
                 for bi in b.unique():
                     # print(b, bi)
                     index = b == bi
+                    total_pos += index.sum()
                     bm, am, gjm, gim = b[index], a[index], gj[index], gi[index]
                     mask_gti = downsampled_masks.squeeze()[index]
                     mask_gti = mask_gti.permute(1, 2, 0).contiguous()
@@ -370,7 +372,7 @@ class ComputeLoss:
                     lseg_ = crop(lseg_, mxyxy)
                     # print(lseg_.shape)
                     lseg_ = lseg_.mean(dim=(0, 1)) / mw / mh
-                    lseg += torch.mean(lseg_)
+                    lseg += torch.sum(lseg_)
 
                 # Append targets to text file
                 # with open('targets.txt', 'a') as file:
@@ -387,7 +389,9 @@ class ComputeLoss:
         lbox *= self.hyp['box']
         lobj *= self.hyp['obj']
         lcls *= self.hyp['cls']
-        lseg *= self.hyp['box'] * 10
+        # lseg *= self.hyp['box'] * 10
+        lseg /= total_pos
+        lseg *= 6.125
         bs = tobj.shape[0]  # batch size
 
         loss = lbox + lobj + lcls + lseg

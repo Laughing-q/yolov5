@@ -96,11 +96,15 @@ class DetectSegment(nn.Module):
 
         self.proto_net = nn.Sequential(
             nn.Conv2d(ch[0], 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(), nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(), nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(), nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1), nn.ReLU(),
-            nn.Conv2d(256, self.mask_dim, kernel_size=1, padding=0), nn.ReLU())
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True), nn.Upsample(scale_factor=2, mode='nearest'),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, self.mask_dim, kernel_size=1, padding=0),
+            nn.ReLU(inplace=True))
 
     def forward(self, x):
         # x = x.copy()  # for profiling
