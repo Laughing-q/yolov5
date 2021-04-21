@@ -1204,10 +1204,7 @@ def random_perspective(img,
         targets[:, 1:5] = new[i]
         new_segments = np.array(new_segments)[i] if len(
             new_segments) else np.array(new_segments)
-    if use_segments:
-        return img, targets, new_segments
-    else:
-        return img, targets
+    return img, targets, new_segments
 
     # return img, targets, new_segments if use_segments else img, targets
 

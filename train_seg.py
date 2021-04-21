@@ -226,7 +226,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             gs,
                                             opt,
                                             hyp=hyp,
-                                            augment=True,
+                                            augment=False,
                                             cache=opt.cache_images,
                                             rect=opt.rect,
                                             rank=rank,
@@ -639,7 +639,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=4,
+                        default=2,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',

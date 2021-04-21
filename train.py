@@ -77,7 +77,8 @@ def train(hyp, opt, device, tb_writer=None):
         loggers['wandb'] = wandb_logger.wandb
         data_dict = wandb_logger.data_dict
         if wandb_logger.wandb:
-            weights, epochs, hyp = opt.weights, opt.epochs, opt.hyp  # WandbLogger might update weights, epochs if resuming
+            # WandbLogger might update weights, epochs if resuming
+            weights, epochs, hyp = opt.weights, opt.epochs, opt.hyp
 
     nc = 1 if opt.single_cls else int(data_dict['nc'])  # number of classes
     names = ['item'] if opt.single_cls and len(
@@ -127,7 +128,8 @@ def train(hyp, opt, device, tb_writer=None):
     nbs = 32  # nominal batch size
     accumulate = max(round(nbs / total_batch_size),
                      1)  # accumulate loss before optimizing
-    hyp['weight_decay'] *= total_batch_size * accumulate / nbs  # scale weight_decay
+    hyp['weight_decay'] *= total_batch_size * \
+        accumulate / nbs  # scale weight_decay
     logger.info(f"Scaled weight_decay = {hyp['weight_decay']}")
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
@@ -162,7 +164,7 @@ def train(hyp, opt, device, tb_writer=None):
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf
     # https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#OneCycleLR
     if opt.linear_lr:
-        lf = lambda x: (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp[
+        def lf(x): return (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp[
             'lrf']  # linear
     else:
         lf = one_cycle(1, hyp['lrf'], epochs)  # cosine 1->hyp['lrf']
@@ -226,7 +228,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             gs,
                                             opt,
                                             hyp=hyp,
-                                            augment=False,
+                                            augment=True,
                                             cache=opt.cache_images,
                                             rect=opt.rect,
                                             rank=rank,
@@ -289,7 +291,8 @@ def train(hyp, opt, device, tb_writer=None):
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
     hyp['cls'] *= nc / 80. * 3. / nl  # scale to classes and layers
-    hyp['obj'] *= (imgsz / 640)**2 * 3. / nl  # scale to image size and layers
+    # scale to image size and layers
+    hyp['obj'] *= (imgsz / 640) ** 2 * 3. / nl
     hyp['label_smoothing'] = opt.label_smoothing
     model.nc = nc  # attach number of classes to model
     model.hyp = hyp  # attach hyperparameters to model
@@ -323,7 +326,7 @@ def train(hyp, opt, device, tb_writer=None):
             # Generate indices
             if rank in [-1, 0]:
                 cw = model.class_weights.cpu().numpy() * (
-                    1 - maps)**2 / nc  # class weights
+                    1 - maps) ** 2 / nc  # class weights
                 iw = labels_to_image_weights(dataset.labels,
                                              nc=nc,
                                              class_weights=cw)  # image weights
@@ -352,10 +355,11 @@ def train(hyp, opt, device, tb_writer=None):
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
-        for i, (
-                imgs, targets, paths, _
-        ) in pbar:  # batch -------------------------------------------------------------
-            ni = i + nb * epoch  # number integrated batches (since train start)
+        # batch -------------------------------------------------------------
+        for i, (imgs, targets, paths, _) in pbar:
+            # number integrated batches (since train start)
+            ni = i + nb * epoch
+            # time.sleep(5)
             imgs = imgs.to(device, non_blocking=True).float(
             ) / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
@@ -390,6 +394,7 @@ def train(hyp, opt, device, tb_writer=None):
                                          align_corners=False)
 
             # Forward
+
             with amp.autocast(enabled=cuda):
                 pred = model(imgs)  # forward
                 loss, loss_items = compute_loss(
@@ -511,22 +516,22 @@ def train(hyp, opt, device, tb_writer=None):
             if (not opt.nosave) or (final_epoch and not opt.evolve):  # if save
                 ckpt = {
                     'epoch':
-                    epoch,
+                        epoch,
                     'best_fitness':
-                    best_fitness,
+                        best_fitness,
                     'training_results':
-                    results_file.read_text(),
+                        results_file.read_text(),
                     'model':
-                    deepcopy(
-                        model.module if is_parallel(model) else model).half(),
+                        deepcopy(
+                            model.module if is_parallel(model) else model).half(),
                     'ema':
-                    deepcopy(ema.ema).half(),
+                        deepcopy(ema.ema).half(),
                     'updates':
-                    ema.updates,
+                        ema.updates,
                     'optimizer':
-                    optimizer.state_dict(),
+                        optimizer.state_dict(),
                     'wandb_id':
-                    wandb_logger.wandb_run.id if wandb_logger.wandb else None
+                        wandb_logger.wandb_run.id if wandb_logger.wandb else None
                 }
 
                 # Save last, best and delete
@@ -603,12 +608,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights',
                         type=str,
-                        default='weights/yolov5m.pt',
+                        default='weights/yolov5l.pt',
                         help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data',
                         type=str,
-                        default='data/balloon.yaml',
+                        default='data/coins.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
@@ -777,9 +782,9 @@ if __name__ == '__main__':
         # Hyperparameter evolution metadata (mutation scale 0-1, lower_limit, upper_limit)
         meta = {
             'lr0':
-            (1, 1e-5, 1e-1),  # initial learning rate (SGD=1E-2, Adam=1E-3)
+                (1, 1e-5, 1e-1),  # initial learning rate (SGD=1E-2, Adam=1E-3)
             'lrf':
-            (1, 0.01, 1.0),  # final OneCycleLR learning rate (lr0 * lrf)
+                (1, 0.01, 1.0),  # final OneCycleLR learning rate (lr0 * lrf)
             'momentum': (0.3, 0.6, 0.98),  # SGD momentum/Adam beta1
             'weight_decay': (1, 0.0, 0.001),  # optimizer weight decay
             'warmup_epochs': (1, 0.0, 5.0),  # warmup epochs (fractions ok)
@@ -794,7 +799,7 @@ if __name__ == '__main__':
             'anchor_t': (1, 2.0, 8.0),  # anchor-multiple threshold
             'anchors': (2, 2.0, 10.0),  # anchors per output grid (0 to ignore)
             'fl_gamma':
-            (0, 0.0, 2.0),  # focal loss gamma (efficientDet default gamma=1.5)
+                (0, 0.0, 2.0),  # focal loss gamma (efficientDet default gamma=1.5)
             'hsv_h': (1, 0.0, 0.1),  # image HSV-Hue augmentation (fraction)
             'hsv_s': (1, 0.0,
                       0.9),  # image HSV-Saturation augmentation (fraction)
@@ -804,7 +809,7 @@ if __name__ == '__main__':
             'scale': (1, 0.0, 0.9),  # image scale (+/- gain)
             'shear': (1, 0.0, 10.0),  # image shear (+/- deg)
             'perspective':
-            (0, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
+                (0, 0.0, 0.001),  # image perspective (+/- fraction), range 0-0.001
             'flipud': (1, 0.0, 1.0),  # image flip up-down (probability)
             'fliplr': (0, 0.0, 1.0),  # image flip left-right (probability)
             'mosaic': (1, 0.0, 1.0),  # image mixup (probability)
