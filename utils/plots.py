@@ -132,6 +132,14 @@ def output_to_target(output):
                 [i, cls, *list(*xyxy2xywh(np.array(box)[None])), conf])
     return np.array(targets)
 
+def output_to_target_(output):
+    # Convert model output to target format [batch_id, class_id, x, y, w, h, conf]
+    targets = []
+    for i, o in enumerate(output):
+        for *box, conf, cls in o.cpu().numpy()[:, :6]:
+            targets.append(
+                [i, cls, *list(*xyxy2xywh(np.array(box)[None])), conf])
+    return np.array(targets)
 
 def plot_images(images,
                 targets,
@@ -313,12 +321,6 @@ def plot_images_(images,
                 mask = image_masks[j].astype(np.bool)
                 # print(mask.shape)
                 # print(mosaic.shape)
-                mosaic[
-                    block_y:block_y + h, block_x:block_x +
-                    w, :][mask] = mosaic[block_y:block_y + h, block_x:block_x +
-                                         w, :][mask] * 0.35 + (np.array(
-                                             [255, 0, 0], dtype=np.uint8) *
-                                                               0.65)
                 if labels or conf[j] > 0.25:  # 0.25 conf thresh
                     label = '%s' % cls if labels else '%s %.1f' % (cls,
                                                                    conf[j])
@@ -327,6 +329,12 @@ def plot_images_(images,
                                  label=label,
                                  color=color,
                                  line_thickness=tl)
+                    mosaic[
+                        block_y:block_y + h, block_x:block_x +
+                        w, :][mask] = mosaic[block_y:block_y + h, block_x:block_x +
+                                             w, :][mask] * 0.35 + (np.array(
+                                                 [255, 0, 0], dtype=np.uint8) *
+                                                                   0.65)
 
         # Draw image filename labels
         if paths:

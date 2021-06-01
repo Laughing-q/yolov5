@@ -57,6 +57,7 @@ def detect(save_img=False):
         cudnn.benchmark = True  # set True to speed up constant image size inference
         dataset = LoadStreams(source, img_size=imgsz, stride=stride)
     else:
+        view_img = check_imshow()
         dataset = LoadImages(source, img_size=imgsz, stride=stride)
 
     # Get names and colors
@@ -86,8 +87,8 @@ def detect(save_img=False):
                                    opt.iou_thres,
                                    classes=opt.classes,
                                    agnostic=opt.agnostic_nms)
-        t2 = time_synchronized()
 
+        t2 = time_synchronized()
         # Apply Classifier
         if classify:
             pred = apply_classifier(pred, modelc, img, im0s)
@@ -142,7 +143,8 @@ def detect(save_img=False):
             # Stream results
             if view_img:
                 cv2.imshow(str(p), im0)
-                cv2.waitKey(1)  # 1 millisecond
+                if cv2.waitKey(1) == ord('q'):  # q to quit
+                    raise StopIteration
 
             # Save results (image with detections)
             if save_img:
@@ -179,17 +181,16 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default=
-        '/d/projects/research/yolov5/runs/train/origin_detect/weights/best.pt',
+        default='/d/projects/research/yolov5/weights/yolov5l6.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',
         type=str,
-        default='/d/projects/research/yolov5/data/balloon/images/val',
+        default='/e/1.avi',
         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size',
                         type=int,
-                        default=640,
+                        default=1280,
                         help='inference size (pixels)')
     parser.add_argument('--conf-thres',
                         type=float,

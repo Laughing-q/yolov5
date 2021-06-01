@@ -46,17 +46,18 @@ def train(hyp, opt, device, tb_writer=None):
         Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank
 
     # Directories
-    wdir = save_dir / 'weights'
-    wdir.mkdir(parents=True, exist_ok=True)  # make dir
-    last = wdir / 'last.pt'
-    best = wdir / 'best.pt'
-    results_file = save_dir / 'results.txt'
+    if not opt.nosave:
+        wdir = save_dir / 'weights'
+        wdir.mkdir(parents=True, exist_ok=True)  # make dir
+        last = wdir / 'last.pt'
+        best = wdir / 'best.pt'
+        results_file = save_dir / 'results.txt'
 
-    # Save run settings
-    with open(save_dir / 'hyp.yaml', 'w') as f:
-        yaml.dump(hyp, f, sort_keys=False)
-    with open(save_dir / 'opt.yaml', 'w') as f:
-        yaml.dump(vars(opt), f, sort_keys=False)
+        # Save run settings
+        with open(save_dir / 'hyp.yaml', 'w') as f:
+            yaml.dump(hyp, f, sort_keys=False)
+        with open(save_dir / 'opt.yaml', 'w') as f:
+            yaml.dump(vars(opt), f, sort_keys=False)
 
     # Configure
     plots = not opt.evolve  # create plots
@@ -77,7 +78,8 @@ def train(hyp, opt, device, tb_writer=None):
         loggers['wandb'] = wandb_logger.wandb
         data_dict = wandb_logger.data_dict
         if wandb_logger.wandb:
-            weights, epochs, hyp = opt.weights, opt.epochs, opt.hyp  # WandbLogger might update weights, epochs if resuming
+            # WandbLogger might update weights, epochs if resuming
+            weights, epochs, hyp = opt.weights, opt.epochs, opt.hyp
 
     nc = 1 if opt.single_cls else int(data_dict['nc'])  # number of classes
     names = ['item'] if opt.single_cls and len(
@@ -127,7 +129,8 @@ def train(hyp, opt, device, tb_writer=None):
     nbs = 32  # nominal batch size
     accumulate = max(round(nbs / total_batch_size),
                      1)  # accumulate loss before optimizing
-    hyp['weight_decay'] *= total_batch_size * accumulate / nbs  # scale weight_decay
+    hyp['weight_decay'] *= total_batch_size * \
+        accumulate / nbs  # scale weight_decay
     logger.info(f"Scaled weight_decay = {hyp['weight_decay']}")
 
     pg0, pg1, pg2 = [], [], []  # optimizer parameter groups
@@ -162,7 +165,7 @@ def train(hyp, opt, device, tb_writer=None):
     # Scheduler https://arxiv.org/pdf/1812.01187.pdf
     # https://pytorch.org/docs/stable/_modules/torch/optim/lr_scheduler.html#OneCycleLR
     if opt.linear_lr:
-        lf = lambda x: (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp[
+        def lf(x): return (1 - x / (epochs - 1)) * (1.0 - hyp['lrf']) + hyp[
             'lrf']  # linear
     else:
         lf = one_cycle(1, hyp['lrf'], epochs)  # cosine 1->hyp['lrf']
@@ -226,7 +229,7 @@ def train(hyp, opt, device, tb_writer=None):
                                             gs,
                                             opt,
                                             hyp=hyp,
-                                            augment=False,
+                                            augment=True,
                                             cache=opt.cache_images,
                                             rect=opt.rect,
                                             rank=rank,
@@ -264,7 +267,7 @@ def train(hyp, opt, device, tb_writer=None):
             c = torch.tensor(labels[:, 0])  # classes
             # cf = torch.bincount(c.long(), minlength=nc) + 1.  # frequency
             # model._initialize_biases(cf.to(device))
-            if plots:
+            if plots and (not opt.nosave):
                 plot_labels(labels, names, save_dir, loggers)
                 if tb_writer:
                     tb_writer.add_histogram('classes', c, 0)
@@ -358,7 +361,8 @@ def train(hyp, opt, device, tb_writer=None):
                 imgs, targets, paths, _, masks
         ) in pbar:  # batch -------------------------------------------------------------
             # print(len(masks[masks > 0]))
-            ni = i + nb * epoch  # number integrated batches (since train start)
+            # number integrated batches (since train start)
+            ni = i + nb * epoch
             imgs = imgs.to(device, non_blocking=True).float(
             ) / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
 
@@ -437,7 +441,7 @@ def train(hyp, opt, device, tb_writer=None):
                 pbar.set_description(s)
 
                 # Plot
-                if plots and ni < 3:
+                if plots and ni < 3 and (not opt.nosave):
                     f = save_dir / f'train_batch{ni}.jpg'  # filename
                     Thread(target=plot_images_,
                            args=(imgs, targets, masks, paths, f),
@@ -485,15 +489,17 @@ def train(hyp, opt, device, tb_writer=None):
                                                      and final_epoch,
                                                      wandb_logger=wandb_logger,
                                                      compute_loss=compute_loss,
+                                                     # compute_loss=None,
                                                      is_coco=is_coco)
 
             # Write
-            with open(results_file, 'a') as f:
-                f.write(s + '%10.4g' * 7 % results +
-                        '\n')  # append metrics, val_loss
-            if len(opt.name) and opt.bucket:
-                os.system('gsutil cp %s gs://%s/results/results%s.txt' %
-                          (results_file, opt.bucket, opt.name))
+            if not opt.nosave:
+                with open(results_file, 'a') as f:
+                    f.write(s + '%10.4g' * 7 % results +
+                            '\n')  # append metrics, val_loss
+                if len(opt.name) and opt.bucket:
+                    os.system('gsutil cp %s gs://%s/results/results%s.txt' %
+                              (results_file, opt.bucket, opt.name))
 
             # Log
             tags = [
@@ -595,7 +601,7 @@ def train(hyp, opt, device, tb_writer=None):
                                               dataloader=testloader,
                                               save_dir=save_dir,
                                               save_json=True,
-                                              plots=False,
+                                              plots=True,
                                               is_coco=is_coco)
 
         # Strip optimizers
@@ -622,24 +628,27 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights',
                         type=str,
-                        default='weights/yolov5m.pt',
+                        default='weights/yolov5s.pt',
                         help='initial weights path')
     parser.add_argument('--cfg',
                         type=str,
-                        default='./models/yolov5m_seg.yaml',
+                        default='./models/yolov5s_seg.yaml',
                         help='model.yaml path')
+    parser.add_argument('--name',
+                        default='person_s',
+                        help='save to project/name')
     parser.add_argument('--data',
                         type=str,
-                        default='data/balloon.yaml',
+                        default='data/coco_person.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
                         default='data/hyp.scratch.yaml',
                         help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=2,
+                        default=4,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',
@@ -655,6 +664,7 @@ if __name__ == '__main__':
                         default=False,
                         help='resume most recent training')
     parser.add_argument('--nosave',
+                        default=False, 
                         action='store_true',
                         help='only save final checkpoint')
     parser.add_argument('--notest',
@@ -701,9 +711,6 @@ if __name__ == '__main__':
                         default='runs/train',
                         help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
-    parser.add_argument('--name',
-                        default='relu_test',
-                        help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',
                         help='existing project/name ok, do not increment')
@@ -787,7 +794,7 @@ if __name__ == '__main__':
     logger.info(opt)
     if not opt.evolve:
         tb_writer = None  # init loggers
-        if opt.global_rank in [-1, 0]:
+        if opt.global_rank in [-1, 0] and (not opt.nosave):
             prefix = colorstr('tensorboard: ')
             logger.info(
                 f"{prefix}Start with 'tensorboard --logdir {opt.project}', view at http://localhost:6006/"

@@ -613,7 +613,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coins.yaml',
+                        default='data/balloon.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
@@ -622,7 +622,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=8,
+                        default=2,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',
@@ -684,7 +684,7 @@ if __name__ == '__main__':
                         help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
     parser.add_argument('--name',
-                        default='origin_detect',
+                        default='origin_detect_l',
                         help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',

@@ -101,7 +101,8 @@ def create_dataloader(path,
             pad=pad,
             image_weights=image_weights,
             prefix=prefix)
-        # dataset.mosaic = False
+        if not rect:
+            dataset.mosaic = True
 
     batch_size = min(batch_size, len(dataset))
     nw = min([
@@ -127,6 +128,7 @@ class InfiniteDataLoader(torch.utils.data.dataloader.DataLoader):
 
     Uses same syntax as vanilla DataLoader
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         object.__setattr__(self, 'batch_sampler',
@@ -147,6 +149,7 @@ class _RepeatSampler(object):
     Args:
         sampler (Sampler)
     """
+
     def __init__(self, sampler):
         self.sampler = sampler
 
@@ -220,7 +223,7 @@ class LoadImages:  # for inference
             print(f'image {self.count}/{self.nf} {path}: ', end='')
 
         # Padded resize
-        img = letterbox(img0, self.img_size, stride=self.stride, auto=False)[0]
+        img = letterbox(img0, self.img_size, stride=self.stride)[0]
 
         # Convert
         img = img[:, :, ::-1].transpose(2, 0, 1)  # BGR to RGB, to 3x416x416
@@ -318,10 +321,10 @@ class LoadStreams:  # multiple IP or RTSP cameras
             # Start the thread to read frames from the video stream
             print(f'{i + 1}/{n}: {s}... ', end='')
             url = eval(s) if s.isnumeric() else s
-            if 'youtube.com/' in url or 'youtu.be/' in url:  # if source is YouTube video
-                check_requirements(('pafy', 'youtube_dl'))
-                import pafy
-                url = pafy.new(url).getbest(preftype="mp4").url
+            # if 'youtube.com/' in url or 'youtu.be/' in url:  # if source is YouTube video
+            #     check_requirements(('pafy', 'youtube_dl'))
+            #     import pafy
+            #     url = pafy.new(url).getbest(preftype="mp4").url
             cap = cv2.VideoCapture(url)
             assert cap.isOpened(), f'Failed to open {s}'
             w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -392,7 +395,8 @@ class LoadStreams:  # multiple IP or RTSP cameras
 
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
-    sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep  # /images/, /labels/ substrings
+    sa, sb = os.sep + 'images' + os.sep, os.sep + \
+        'labels' + os.sep  # /images/, /labels/ substrings
     return [
         'txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1))
         for x in img_paths
@@ -401,7 +405,8 @@ def img2label_paths(img_paths):
 
 def img2mask_paths(img_paths):
     # Define label paths as a function of image paths
-    sa, sb = os.sep + 'images' + os.sep, os.sep + 'masks' + os.sep  # /images/, /labels/ substrings
+    sa, sb = os.sep + 'images' + os.sep, os.sep + \
+        'masks' + os.sep  # /images/, /labels/ substrings
     return [
         'npy'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1))
         for x in img_paths
@@ -427,7 +432,8 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         self.hyp = hyp
         self.image_weights = image_weights
         self.rect = False if image_weights else rect
-        self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
+        # load 4 images at a time into a mosaic (only during training)
+        self.mosaic = self.augment and not self.rect
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.path = path
@@ -568,6 +574,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 if os.path.isfile(lb_file):
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
+                        print('------------------------------')
                         l = [x.split() for x in f.read().strip().splitlines()]
                         if any([len(x) > 8 for x in l]):  # is segment
                             classes = np.array([x[0] for x in l],
@@ -579,7 +586,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                             ]  # (cls, xy1...)
                             l = np.concatenate((classes.reshape(
                                 -1, 1), segments2boxes(segments)),
-                                               1)  # (cls, xywh)
+                                1)  # (cls, xywh)
                         l = np.array(l, dtype=np.float32)
                     if len(l):
                         assert l.shape[1] == 5, 'labels require 5 columns each'
@@ -1204,9 +1211,9 @@ def random_perspective(img,
         targets[:, 1:5] = new[i]
         new_segments = np.array(new_segments)[i] if len(
             new_segments) else np.array(new_segments)
-    return img, targets, new_segments
+    # return img, targets, new_segments
 
-    # return img, targets, new_segments if use_segments else img, targets
+    return (img, targets, new_segments) if use_segments else (img, targets)
 
 
 def box_candidates(box1,
@@ -1359,7 +1366,7 @@ def autosplit(path='../coco128',
           ', using *.txt labeled images only' * annotated_only)
     for i, img in tqdm(zip(indices, files), total=n):
         if not annotated_only or Path(img2label_paths(
-            [str(img)])[0]).exists():  # check label
+                [str(img)])[0]).exists():  # check label
             with open(path / txt[i], 'a') as f:
                 f.write(str(img) + '\n')  # add image to txt file
 
@@ -1384,7 +1391,8 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
         self.hyp = hyp
         self.image_weights = image_weights
         self.rect = False if image_weights else rect
-        self.mosaic = self.augment and not self.rect  # load 4 images at a time into a mosaic (only during training)
+        # load 4 images at a time into a mosaic (only during training)
+        self.mosaic = self.augment and not self.rect
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.stride = stride
         self.path = path
@@ -1529,7 +1537,6 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                     nf += 1  # label found
                     with open(lb_file, 'r') as f:
                         l = [x.split() for x in f.read().strip().splitlines()]
-
                         if any([len(x) > 8 for x in l]):  # is segment
                             classes = np.array([x[0] for x in l],
                                                dtype=np.float32)
@@ -1544,7 +1551,7 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                             #     print(segments)
                             l = np.concatenate((classes.reshape(
                                 -1, 1), segments2boxes(segments)),
-                                               1)  # (cls, xywh)
+                                1)  # (cls, xywh)
                         l = np.array(l, dtype=np.float32)
                     if len(l):
                         assert l.shape[1] == 5, 'labels require 5 columns each'
@@ -1563,6 +1570,8 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                 x[im_file] = [l, shape, segments]
             except Exception as e:
                 nc += 1
+                os.remove(im_file)
+                os.remove(im_file.replace('images', 'labels').replace('jpg', 'txt'))
                 print(
                     f'{prefix}WARNING: Ignoring corrupted image and/or label {im_file}: {e}'
                 )

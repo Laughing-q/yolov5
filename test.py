@@ -381,15 +381,15 @@ if __name__ == '__main__':
     parser.add_argument('--weights',
                         nargs='+',
                         type=str,
-                        default='yolov5s.pt',
+                        default='/d/projects/research/yolov5/runs/train/origin_detect_l/weights/best.pt',
                         help='model.pt path(s)')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coco128.yaml',
+                        default='data/balloon.yaml',
                         help='*.data path')
     parser.add_argument('--batch-size',
                         type=int,
-                        default=32,
+                        default=1,
                         help='size of each image batch')
     parser.add_argument('--img-size',
                         type=int,
@@ -433,7 +433,7 @@ if __name__ == '__main__':
     parser.add_argument('--project',
                         default='runs/test',
                         help='save to project/name')
-    parser.add_argument('--name', default='exp', help='save to project/name')
+    parser.add_argument('--name', default='origin_detect_l', help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',
                         help='existing project/name ok, do not increment')

@@ -29,13 +29,13 @@ with open('data/hyp.scratch.yaml') as f:
 # dataset = LoadImagesAndLabels('data/play_phone1216/images/train', img_size=640, augment=True, cache_images=False,
 #                               hyp=hyp)
 dataset = LoadImagesAndLabelsAndMasks(
-    '/d/projects/research/yolov5/data/balloon/images/train',
+    '/d/projects/research/yolov5/data/coco_person/images',
     img_size=640,
     augment=True,
     cache_images=False,
     hyp=hyp,
 )
-dataset.mosaic = False
+dataset.mosaic = True
 
 save = False
 save_dir = '/d/projects/yolov5/data/play_phone0115/show_labels'

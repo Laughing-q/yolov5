@@ -13,9 +13,9 @@ from tqdm import tqdm
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import coco80_to_coco91_class, check_dataset, check_file, check_img_size, check_requirements, \
-    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_, process_mask, mask_iou
+    box_iou, non_max_suppression, scale_coords, xyxy2xywh, xywh2xyxy, set_logging, increment_path, colorstr, non_max_suppression_, process_mask, mask_iou, process_mask_upsample
 from utils.metrics import ap_per_class, ConfusionMatrix
-from utils.plots import plot_images, output_to_target, plot_study_txt, plot_images_
+from utils.plots import plot_images, output_to_target, plot_study_txt, plot_images_, output_to_target_
 from utils.torch_utils import select_device, time_synchronized
 
 
@@ -67,7 +67,8 @@ def test(
         #     model = nn.DataParallel(model)
 
     # Half
-    half = device.type != 'cpu' and half_precision  # half precision only supported on CUDA
+    # half precision only supported on CUDA
+    half = device.type != 'cpu' and half_precision
     if half:
         model.half()
 
@@ -130,6 +131,7 @@ def test(
         # if cv2.waitKey(0) == ord('q'):  # q to quit
         #     break
         # continue
+        pred_masks = []
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
@@ -278,10 +280,16 @@ def test(
                             1)  # best ious, indices
 
                         # n, h, w
-                        pred_maski = process_mask(proto_out[si], predn[pi, 6:],
-                                                  predn[pi, :4],
-                                                  img.shape[2:]).permute(
-                                                      2, 0, 1).contiguous()
+                        # pred_maski = process_mask_upsample(proto_out[si], predn[pi, 6:],
+                        #                           predn[pi, :4],
+                        #                           img.shape[2:]).permute(
+                        #                               2, 0, 1).contiguous()
+                        # # ious, i = mask_iou(
+                        # #     pred_maski.view(pred_maski.shape[0], -1),
+                        # #     masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
+                        # pred_masks.append(pred_maski.detach().int())
+                        # print(ious.max())
+
                         # print(masks.shape, pred_maski.shape)
                         # for i in pred_maski:
                         #     cv2.imshow('p', i.cpu().numpy() * 255)
@@ -291,10 +299,7 @@ def test(
                         #     cv2.imshow('p', i.cpu().numpy() * 255)
                         #     if cv2.waitKey(0) == ord('q'):
                         #         exit()
-                        # ious, i = mask_iou(
-                        #     pred_maski.view(pred_maski.shape[0], -1),
-                        #     masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
-                        # print(ious.max())
+
                         # Append detections
                         detected_set = set()
                         for j in (ious > iouv[0]).nonzero(as_tuple=False):
@@ -317,11 +322,13 @@ def test(
         if plots and batch_i < 3:
             f = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
             Thread(target=plot_images_,
-                   args=(img, targets, masks, paths, f, names),
+                   args=(img, targets, masks, paths, f, names, 672),
                    daemon=True).start()
+
+            pred_masks = torch.cat(pred_masks, dim=0) if len(pred_masks) > 1 else pred_masks[0]
             f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
             Thread(target=plot_images_,
-                   args=(img, output_to_target(out), masks, paths, f, names),
+                   args=(img, output_to_target_(out), pred_masks, paths, f, names, 672),
                    daemon=True).start()
 
     # Compute statistics
@@ -414,8 +421,9 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default='/d/projects/research/yolov5/runs/train/relu/weights/best.pt',
+        default='/d/projects/research/yolov5/runs/train/silu_l_test_mosaic2/weights/best.pt',
         help='model.pt path(s)')
+    parser.add_argument('--name', default='silu_l_test_mosaic', help='save to project/name')
     parser.add_argument('--data',
                         type=str,
                         default='data/balloon.yaml',
@@ -466,7 +474,6 @@ if __name__ == '__main__':
     parser.add_argument('--project',
                         default='runs/test',
                         help='save to project/name')
-    parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',
                         help='existing project/name ok, do not increment')
@@ -508,7 +515,8 @@ if __name__ == '__main__':
         # python test.py --task study --data coco.yaml --iou 0.7 --weights yolov5s.pt yolov5m.pt yolov5l.pt yolov5x.pt
         x = list(range(256, 1536 + 128, 128))  # x axis (image sizes)
         for w in opt.weights:
-            f = f'study_{Path(opt.data).stem}_{Path(w).stem}.txt'  # filename to save to
+            # filename to save to
+            f = f'study_{Path(opt.data).stem}_{Path(w).stem}.txt'
             y = []  # y axis
             for i in x:  # img-size
                 print(f'\nRunning {f} point {i}...')

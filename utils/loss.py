@@ -320,7 +320,8 @@ class ComputeLoss:
                 downsampled_masks = F.interpolate(
                     mask_gt[None, :],
                     (mask_h, mask_w),
-                    mode='nearest',
+                    mode='bilinear',
+                    align_corners=False
                 )
                 # mask_h, mask_w, num_pos
                 # downsampled_masks = downsampled_masks.squeeze().permute(
@@ -332,13 +333,17 @@ class ComputeLoss:
                 for bi in b.unique():
                     # print(b, bi)
                     index = b == bi
+                    # print(index.sum())
                     total_pos += index.sum()
                     bm, am, gjm, gim = b[index], a[index], gj[index], gi[index]
-                    mask_gti = downsampled_masks.squeeze()[index]
+                    # print(downsampled_masks.squeeze().shape)
+                    # print(index.shape)
+                    # mask_gti = downsampled_masks.squeeze()[index] # squeeze()会将维度1的轴都去掉
+                    mask_gti = downsampled_masks[0][index]
                     mask_gti = mask_gti.permute(1, 2, 0).contiguous()
                     mxywh = xywh[i][index]
                     mw, mh = mxywh[:, 2:].T
-                    mw, mh = mw / pi.shape[3], pi.shape[2]
+                    mw, mh = mw / pi.shape[3], mh / pi.shape[2]
                     # print(mxywh.shape)
                     mxywh = mxywh / torch.tensor(
                         pi.shape,
@@ -367,7 +372,7 @@ class ComputeLoss:
                     #     exit()
                     # lseg += nn.MSELoss(reduction='mean')(pred_maski, mask_gti)
                     lseg_ = F.binary_cross_entropy_with_logits(
-                        pred_maski, mask_gti, reduction='none')
+                        pred_maski, mask_gti, reduction='none') * 6.125
 
                     lseg_ = crop(lseg_, mxyxy)
                     # print(lseg_.shape)
@@ -389,9 +394,9 @@ class ComputeLoss:
         lbox *= self.hyp['box']
         lobj *= self.hyp['obj']
         lcls *= self.hyp['cls']
-        # lseg *= self.hyp['box'] * 10
+        lseg *= (self.hyp['box'] / 2)
         lseg /= total_pos
-        lseg *= 6.125
+        # lseg *= 6.125
         bs = tobj.shape[0]  # batch size
 
         loss = lbox + lobj + lcls + lseg
@@ -469,6 +474,7 @@ class ComputeLoss:
             gxy = t[:, 2:4]  # grid xy
             gwh = t[:, 4:6]  # grid wh
             gij = (gxy - offsets).long()
+            # gij = gxy.long()
             gi, gj = gij.T  # grid xy indices
 
             # Append
