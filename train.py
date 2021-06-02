@@ -608,12 +608,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights',
                         type=str,
-                        default='weights/yolov5l.pt',
+                        default='weights/yolov5s.pt',
                         help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data',
                         type=str,
-                        default='data/balloon.yaml',
+                        default='data/coco_person.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
@@ -622,7 +622,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
-                        default=2,
+                        default=4,
                         help='total batch size for all GPUs')
     parser.add_argument('--img-size',
                         nargs='+',
@@ -684,7 +684,7 @@ if __name__ == '__main__':
                         help='save to project/name')
     parser.add_argument('--entity', default=None, help='W&B entity')
     parser.add_argument('--name',
-                        default='origin_detect_l',
+                        default='origin_person_s',
                         help='save to project/name')
     parser.add_argument('--exist-ok',
                         action='store_true',

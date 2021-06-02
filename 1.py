@@ -100,8 +100,21 @@
 # print(a)
 # print(1 | 0)
 
-import os
+# import os
+#
+#
+# os.system("python ./train_seg.py --weights weights/yolov5m.pt --cfg ./models/yolov5m_seg.yaml --name silu_m_test")
+# os.system("python ./train_seg.py --weights weights/yolov5s.pt --cfg ./models/yolov5s_seg.yaml --name silu_s_test")
+
+# from utils.plots import plot_results
+#
+# plot_results(save_dir='/d/projects/research/yolov5/runs/train/person_s', mask_head=True)
+import torch
+
+a = torch.randn(4, 5)[None, None, :]
+print(a.shape)
 
 
-os.system("python ./train_seg.py --weights weights/yolov5m.pt --cfg ./models/yolov5m_seg.yaml --name silu_m_test")
-os.system("python ./train_seg.py --weights weights/yolov5s.pt --cfg ./models/yolov5s_seg.yaml --name silu_s_test")
+
+
+

@@ -280,14 +280,14 @@ def test(
                             1)  # best ious, indices
 
                         # n, h, w
-                        # pred_maski = process_mask_upsample(proto_out[si], predn[pi, 6:],
-                        #                           predn[pi, :4],
-                        #                           img.shape[2:]).permute(
-                        #                               2, 0, 1).contiguous()
-                        # # ious, i = mask_iou(
-                        # #     pred_maski.view(pred_maski.shape[0], -1),
-                        # #     masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
-                        # pred_masks.append(pred_maski.detach().int())
+                        pred_maski = process_mask_upsample(proto_out[si], predn[pi, 6:],
+                                                  predn[pi, :4],
+                                                  img.shape[2:]).permute(
+                                                      2, 0, 1).contiguous()
+                        ious, i = mask_iou(
+                            pred_maski.view(pred_maski.shape[0], -1),
+                            masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
+                        pred_masks.append(pred_maski.detach().int())
                         # print(ious.max())
 
                         # print(masks.shape, pred_maski.shape)
@@ -421,12 +421,12 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default='/d/projects/research/yolov5/runs/train/silu_l_test_mosaic2/weights/best.pt',
+        default='/d/projects/research/yolov5/runs/train/person_s/weights/best.pt',
         help='model.pt path(s)')
-    parser.add_argument('--name', default='silu_l_test_mosaic', help='save to project/name')
+    parser.add_argument('--name', default='person_s', help='save to project/name')
     parser.add_argument('--data',
                         type=str,
-                        default='data/balloon.yaml',
+                        default='data/coco_person.yaml',
                         help='*.data path')
     parser.add_argument('--batch-size',
                         type=int,

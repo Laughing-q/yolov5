@@ -1,5 +1,5 @@
 # Plotting utils
-
+import time
 import glob
 import math
 import os
@@ -76,13 +76,49 @@ def plot_one_box(x, img, color=None, label=None, line_thickness=3):
                     lineType=cv2.LINE_AA)
 
 
-def plot_one_mask(img0, color, masks):
-    color = np.array([0, 0, 255], dtype=np.uint8)
-    bbox_mask = masks.astype(np.bool)
+def plot_one_mask(img0, color, masks, alpha=0.5):
+    # color = np.array([0, 0, 255], dtype=np.uint8)
+    tm = time.time()
+    bbox_mask = masks.astype(bool)
 
-    img0[bbox_mask] = img0[bbox_mask] * 0 + color * 1
-    return img0
+    img0[bbox_mask] = img0[bbox_mask] * (1 - alpha) + color * alpha
+    return time.time() - tm
+    # return img0
 
+def plot_masks(img, masks, colors, alpha=0.5):
+    """
+    Args:
+        img (tensor): img on cuda, shape: [1, 3, h, w]
+        masks (tensor): predicted masks on cuda, shape: [n, h, w]
+        colors (list[list]): colors for predicted masks, [[r, g, b] * n] 
+    Return:
+        img after draw masks, shape: [h, w, 3]
+
+    transform colors and send img_gpu to cpu for the most time.
+    """
+    img_gpu = img.clone()
+    num_masks = len(masks)
+    # [n, 1, 1, 3]
+    # faster this way to transform colors
+    colors = torch.tensor(colors, device=img.device).float() / 255.
+    colors = colors[:, None, None, :]
+    # colors = torch.cat([torch.tensor(color, device=img.device).view(1, 1, 1, 3).float() / 255. 
+    #                      for color in colors])
+    # [n, h, w, 1]
+    masks = masks[:, :, :, None]
+    masks_color = masks.repeat(1, 1, 1, 3) * colors * alpha
+    inv_alph_masks = masks * (-alpha) + 1
+    masks_color_summand = masks_color[0]
+    if num_masks > 1:
+        inv_alph_cumul = inv_alph_masks[:(num_masks - 1)].cumprod(dim=0)
+        masks_color_cumul = masks_color[1:] * inv_alph_cumul
+        masks_color_summand += masks_color_cumul.sum(dim=0)
+
+    # print(inv_alph_masks.prod(dim=0).shape) # [h, w, 1]
+    img_gpu = img_gpu[0].permute(1, 2, 0).contiguous()
+    # [h, w, 3]
+    img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
+    return (img_gpu * 255).byte().cpu().numpy()
 
 def plot_one_box_PIL(box, img, color=None, label=None, line_thickness=None):
     img = Image.fromarray(img)
@@ -663,21 +699,37 @@ def plot_results(start=0,
                 usecols=[2, 3, 5, 9, 10, 13, 14, 15, 11, 12]
                 if mask_head else [2, 3, 4, 8, 9, 12, 13, 14, 10, 11],
                 ndmin=2).T
+            index = np.argmax(0.9 * results[-1] + 0.1 * results[-2])
             n = results.shape[1]  # number of rows
             x = range(start, min(stop, n) if stop else n)
             for i in range(10):
                 y = results[i, x]
                 if i in [0, 1, 2, 5, 6, 7]:
-                    y[y == 0] = np.nan  # don't show zero loss values
+                    y[y == 0] = np.nan  # dont show zero loss values
                     # y /= y[0]  # normalize
-                label = labels[fi] if len(labels) else f.stem
-                ax[i].plot(x,
-                           y,
-                           marker='.',
-                           label=label,
-                           linewidth=2,
-                           markersize=8)
-                ax[i].set_title(s[i])
+                label = labels[fi] if len(labels) else Path(f).stem
+                # ax[i].plot(x, y, marker='.', label=label, linewidth=2, markersize=8)
+                ax[i].plot(x, y, label=label, linewidth=2)
+                ax[i].scatter(index, y[index], color='r',
+                              label='best', marker='*', linewidth=3)
+
+                # ax[i].set_title(s[i])
+
+                # if i in [3, 4, 8, 9]:
+                ax[i].set_title(s[i] + f'\n{results[i][index]}')
+            # for i in range(10):
+            #     y = results[i, x]
+            #     if i in [0, 1, 2, 5, 6, 7]:
+            #         y[y == 0] = np.nan  # don't show zero loss values
+            #         # y /= y[0]  # normalize
+            #     label = labels[fi] if len(labels) else f.stem
+            #     ax[i].plot(x,
+            #                y,
+            #                marker='.',
+            #                label=label,
+            #                linewidth=2,
+            #                markersize=8)
+            #     ax[i].set_title(s[i])
                 # if i in [5, 6, 7]:  # share train and val loss y axes
                 #     ax[i].get_shared_y_axes().join(ax[i], ax[i - 5])
         except Exception as e:

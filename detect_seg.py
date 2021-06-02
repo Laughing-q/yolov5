@@ -11,7 +11,7 @@ from models.experimental import attempt_load
 from utils.datasets import LoadStreams, LoadImages
 from utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression_, apply_classifier, \
     scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path, process_mask, scale_masks, process_mask_upsample
-from utils.plots import plot_one_box, plot_one_mask
+from utils.plots import plot_one_box, plot_one_mask, plot_masks
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 import numpy as np
 
@@ -115,21 +115,14 @@ def detect(save_img=False):
             gn = torch.tensor(im0.shape)[[1, 0, 1,
                                           0]]  # normalization gain whwh
             if len(det):
+                m_colors = [colors[int(cls)] for cls in det[:, 5]]
                 # print('det:', det.shape)
                 out_masks = det[:, 6:]  # [img_h, img_w, num]
                 masks = process_mask_upsample(proto_out[i], out_masks, det[:, :4],
                                      img.shape[2:])
-                masks = scale_masks(img.shape[2:], masks, im0.shape)
-                # print(masks.shape)
-                # np.save(p.name + '.npy', masks.cpu().numpy())
-                # for mi in masks.cpu().numpy():
-                #     # print(mi.max())
-                #     # print(mi.min())
-                #     # print(mi[mi > 0])
-                #     # exit()
-                #     cv2.imshow('p', mi * 255)
-                #     if cv2.waitKey(0) == ord('q'):
-                #         exit()
+                img_masks = plot_masks(img, masks.permute(2, 0, 1).contiguous(), m_colors)
+                im0 = scale_masks(img.shape[2:], img_masks, im0.shape)
+
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4],
                                           im0.shape).round()
@@ -142,6 +135,7 @@ def detect(save_img=False):
 
                 # Write results
                 for i, (*xyxy, conf, cls) in enumerate(reversed(det[:, :6])):
+                    # m_colors.append(colors[int(cls)])
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) /
                                 gn).view(-1).tolist()  # normalized xywh
@@ -152,16 +146,19 @@ def detect(save_img=False):
 
                     if save_img or view_img:  # Add bbox to image
                         label = f'{names[int(cls)]} {conf:.2f}'
+                        # tb = time.time()
                         plot_one_box(xyxy,
                                      im0,
                                      label=label,
                                      color=colors[int(cls)],
                                      line_thickness=3)
+                        # print('plot boxes:', time.time() - tb)
                         # print(im0.shape)
                         # print(masks[:, :, i].shape)
-                        im0 = plot_one_mask(im0,
-                                            color=None,
-                                            masks=masks[:, :, i])
+                        # t_mask = plot_one_mask(im0,
+                        #                     color=np.array(colors[int(cls)]),
+                        #                     masks=masks[:, :, i])
+                        # print('plot masks:', t_mask)
 
             # Print time (inference + NMS)
             print(f'{s}Done. ({t2 - t1:.3f}s)')
@@ -211,15 +208,15 @@ if __name__ == '__main__':
         nargs='+',
         type=str,
         default=
-        '/d/projects/research/yolov5/runs/train/silu_s_test_mosaic2/weights/best.pt',
+        '/d/projects/research/yolov5/runs/train/person_s/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',
         type=str,
-        default='/d/projects/research/yolov5/data/balloon/images/val',
+        default='/e/output2.m4v',
         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--name',
-                        default='silu_s_test_mosaic', 
+                        default='person_s', 
                         help='save results to project/name')
     parser.add_argument('--img-size',
                         type=int,
@@ -246,7 +243,7 @@ if __name__ == '__main__':
                         action='store_true',
                         help='save confidences in --save-txt labels')
     parser.add_argument('--nosave',
-                        default=False,
+                        default=True,
                         action='store_true',
                         help='do not save images/videos')
     parser.add_argument('--classes',
