@@ -113,6 +113,7 @@ import torch
 
 a = torch.randn(4, 5)[None, None, :]
 print(a.shape)
+print(a)
 
 
 

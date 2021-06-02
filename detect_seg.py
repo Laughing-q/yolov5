@@ -120,7 +120,9 @@ def detect(save_img=False):
                 out_masks = det[:, 6:]  # [img_h, img_w, num]
                 masks = process_mask_upsample(proto_out[i], out_masks, det[:, :4],
                                      img.shape[2:])
+                tmp = time.time()
                 img_masks = plot_masks(img, masks.permute(2, 0, 1).contiguous(), m_colors)
+                print('plot masks:', time.time() - tmp)
                 im0 = scale_masks(img.shape[2:], img_masks, im0.shape)
 
                 # Rescale boxes from img_size to im0 size

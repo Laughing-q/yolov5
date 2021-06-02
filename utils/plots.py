@@ -115,7 +115,8 @@ def plot_masks(img, masks, colors, alpha=0.5):
         masks_color_summand += masks_color_cumul.sum(dim=0)
 
     # print(inv_alph_masks.prod(dim=0).shape) # [h, w, 1]
-    img_gpu = img_gpu[0].permute(1, 2, 0).contiguous()
+    img_gpu = img_gpu[0].flip(dims=[0]) # filp channel for opencv
+    img_gpu = img_gpu.permute(1, 2, 0).contiguous()
     # [h, w, 3]
     img_gpu = img_gpu * inv_alph_masks.prod(dim=0) + masks_color_summand
     return (img_gpu * 255).byte().cpu().numpy()
