@@ -601,7 +601,7 @@ def train(hyp, opt, device, tb_writer=None):
                                               dataloader=testloader,
                                               save_dir=save_dir,
                                               save_json=True,
-                                              plots=True,
+                                              plots=False,
                                               is_coco=is_coco)
 
         # Strip optimizers
@@ -635,17 +635,17 @@ if __name__ == '__main__':
                         default='./models/yolov5s_seg.yaml',
                         help='model.yaml path')
     parser.add_argument('--name',
-                        default='person_s',
+                        default='coco_s',
                         help='save to project/name')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coco_person.yaml',
+                        default='data/balloon.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
                         default='data/hyp.scratch.yaml',
                         help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('--batch-size',
                         type=int,
                         default=4,

@@ -280,14 +280,14 @@ def test(
                             1)  # best ious, indices
 
                         # n, h, w
-                        pred_maski = process_mask_upsample(proto_out[si], predn[pi, 6:],
-                                                  predn[pi, :4],
-                                                  img.shape[2:]).permute(
-                                                      2, 0, 1).contiguous()
-                        ious, i = mask_iou(
-                            pred_maski.view(pred_maski.shape[0], -1),
-                            masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
-                        pred_masks.append(pred_maski.detach().int())
+                        # pred_maski = process_mask_upsample(proto_out[si], predn[pi, 6:],
+                        #                           predn[pi, :4],
+                        #                           img.shape[2:]).permute(
+                        #                               2, 0, 1).contiguous()
+                        # ious, i = mask_iou(
+                        #     pred_maski.view(pred_maski.shape[0], -1),
+                        #     masksi[ti].view(masksi[ti].shape[0], -1)).max(1)
+                        # pred_masks.append(pred_maski.detach().int())
                         # print(ious.max())
 
                         # print(masks.shape, pred_maski.shape)
@@ -327,6 +327,7 @@ def test(
 
             pred_masks = torch.cat(pred_masks, dim=0) if len(pred_masks) > 1 else pred_masks[0]
             f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
+            # pred_masks与out的长度可能不一致，out是经过nms之后的所有，而pred_masks是根据标签中有的cls再筛选过一次；
             Thread(target=plot_images_,
                    args=(img, output_to_target_(out), pred_masks, paths, f, names, 672),
                    daemon=True).start()
@@ -423,10 +424,11 @@ if __name__ == '__main__':
         type=str,
         default='/d/projects/research/yolov5/runs/train/person_s/weights/best.pt',
         help='model.pt path(s)')
-    parser.add_argument('--name', default='person_s', help='save to project/name')
+    parser.add_argument('--name', default='coco_s', help='save to project/name')
     parser.add_argument('--data',
                         type=str,
                         default='data/coco_person.yaml',
+                        # default='data/coco_person.yaml',
                         help='*.data path')
     parser.add_argument('--batch-size',
                         type=int,

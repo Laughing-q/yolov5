@@ -258,7 +258,6 @@ class ComputeLoss:
         """
         p = preds[0]
         proto_out = preds[1]
-        mask_out = preds[2]
         # print(proto_out.shape)
         # batch_size, mask_dim, mask_h, mask_w
         mask_h, mask_w = proto_out.shape[2:]
@@ -316,6 +315,9 @@ class ComputeLoss:
                 # print(pred_mask.shape)
                 # # num_pos, image_h, image_w
                 mask_gt = masks[tidxs[i]]
+                # for k in range(mask_gt.shape[0]):
+                #     cv2.imshow('p', mask_gt[k].cpu().numpy())
+                #     cv2.waitKey(0)
                 # print(len(mask_gt[mask_gt > 0]))
                 downsampled_masks = F.interpolate(
                     mask_gt[None, :],
@@ -354,6 +356,10 @@ class ComputeLoss:
                     psi = pi[bm, am, gjm, gim]
                     # psi.tanh().cpu().detach().numpy())
                     pred_maski = proto_out[bi] @ psi[:, 5:37].tanh().T
+                    # maskssss = crop(mask_gti, mxyxy)
+                    # for k in range(maskssss.shape[-1]):
+                    #     cv2.imshow('p', cv2.resize(maskssss[:, :, k].cpu().numpy(), (640, 640)))
+                    #     cv2.waitKey(0)
                     # pred_maski = proto_out[bi] @ psi.tanh().T
 
                     # np.savetxt(
@@ -463,7 +469,7 @@ class ComputeLoss:
                 j, k = ((gxy % 1. < g) & (gxy > 1.)).T
                 l, m = ((gxi % 1. < g) & (gxi > 1.)).T
                 j = torch.stack((torch.ones_like(j), j, k, l, m))
-                t = t.repeat((5, 1, 1))[j]
+                # t = t.repeat((5, 1, 1))[j]
                 offsets = (torch.zeros_like(gxy)[None] + off[:, None])[j]
             else:
                 t = targets[0]
@@ -473,8 +479,8 @@ class ComputeLoss:
             b, c = t[:, :2].long().T  # image, class
             gxy = t[:, 2:4]  # grid xy
             gwh = t[:, 4:6]  # grid wh
-            gij = (gxy - offsets).long()
-            # gij = gxy.long()
+            # gij = (gxy - offsets).long()
+            gij = gxy.long()
             gi, gj = gij.T  # grid xy indices
 
             # Append

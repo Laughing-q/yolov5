@@ -59,7 +59,7 @@ def exif_size(img):
     return s
 
 
-def polygon2mask2(img_size, polygons):
+def polygon2mask(img_size, polygons):
     mask = np.zeros(img_size, dtype=np.uint8)
     polygons = np.asarray(polygons, np.int32)
     shape = polygons.shape
@@ -1570,8 +1570,8 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
                 x[im_file] = [l, shape, segments]
             except Exception as e:
                 nc += 1
-                os.remove(im_file)
-                os.remove(im_file.replace('images', 'labels').replace('jpg', 'txt'))
+                # os.remove(im_file)
+                # os.remove(im_file.replace('images', 'labels').replace('jpg', 'txt'))
                 print(
                     f'{prefix}WARNING: Ignoring corrupted image and/or label {im_file}: {e}'
                 )
@@ -1680,7 +1680,7 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
             labels[:, [2, 4]] /= img.shape[0]  # normalized height 0-1
             labels[:, [1, 3]] /= img.shape[1]  # normalized width 0-1
             for si in range(len(segments)):
-                mask = polygon2mask2(
+                mask = polygon2mask(
                     # (int(ratio[1] * h), int(ratio[0] * w)),
                     # (shape, shape) if isinstance(shape, int) else shape,
                     img.shape[:2],
@@ -1710,7 +1710,7 @@ class LoadImagesAndLabelsAndMasks(Dataset):  # for training/testing
 
         return torch.from_numpy(
             img), labels_out, self.img_files[index], shapes, torch.stack(
-                masks, axis=0) if len(masks) else torch.zeros(nL, 640, 640)
+                masks, axis=0) if len(masks) else torch.zeros(nL, self.img_size, self.img_size)
 
     @staticmethod
     def collate_fn(batch):

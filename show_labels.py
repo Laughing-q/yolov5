@@ -29,7 +29,7 @@ with open('data/hyp.scratch.yaml') as f:
 # dataset = LoadImagesAndLabels('data/play_phone1216/images/train', img_size=640, augment=True, cache_images=False,
 #                               hyp=hyp)
 dataset = LoadImagesAndLabelsAndMasks(
-    '/d/projects/research/yolov5/data/coco_person/images',
+    '/d/baidubase/COCO/val_yolo/images/train',
     img_size=640,
     augment=True,
     cache_images=False,

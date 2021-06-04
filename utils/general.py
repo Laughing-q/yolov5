@@ -610,8 +610,7 @@ def non_max_suppression_(prediction,
                          classes=None,
                          agnostic=False,
                          multi_label=False,
-                         labels=(),
-                         mask_out=[]):
+                         labels=()):
     """Runs Non-Maximum Suppression (NMS) on inference results
 
     Returns:
@@ -656,7 +655,7 @@ def non_max_suppression_(prediction,
             continue
 
         # Compute conf
-        x[:, 5:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
+        x[:, 37:] *= x[:, 4:5]  # conf = obj_conf * cls_conf
 
         # Box (center x, center y, width, height) to (x1, y1, x2, y2)
         box = xywh2xyxy(x[:, :4])
@@ -690,8 +689,7 @@ def non_max_suppression_(prediction,
 
         # Batched NMS
         c = x[:, 5:6] * (0 if agnostic else max_wh)  # classes
-        boxes, scores = x[:, :4] + c, x[:,
-                                        4]  # boxes (offset by class), scores
+        boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
         i = torchvision.ops.nms(boxes, scores, iou_thres)  # NMS
         if i.shape[0] > max_det:  # limit detections
             i = i[:max_det]
@@ -779,10 +777,12 @@ def process_mask_upsample(proto_out, out_masks, bboxes, shape):
     masks = F.interpolate(masks.unsqueeze(0), shape, mode='bilinear', align_corners=False).squeeze(0)
     # [mask_h, mask_w, n]
     masks = crop(masks.permute(1, 2, 0).contiguous(), bboxes)
+    # masks = masks.permute(1, 2, 0).contiguous()
     # return masks.gt_(0.005).permute(2, 0, 1).contiguous()
     # masks = torch.where(masks > 0, 1., 0.)
     # return masks.gt_(0.5).permute(2, 0, 1).contiguous()
     return masks.gt_(0.5) # .gt_(0.2)
+    # return torch.where(masks < 0.5, 1., 0.) # .gt_(0.2)
 
 def scale_masks(img1_shape, masks, img0_shape, ratio_pad=None):
     """

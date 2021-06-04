@@ -111,7 +111,6 @@ class DetectSegment(nn.Module):
         z = []  # inference output
         self.training |= self.export
         proto_out = None
-        mask_out = []
         # print(self.m[0].weight.shape)
         # print(self.m[0].weight[:5])
         for i in range(self.nl):
@@ -138,7 +137,7 @@ class DetectSegment(nn.Module):
                 y[..., 2:4] = (y[..., 2:4] * 2)**2 * self.anchor_grid[i]  # wh
                 z.append(y.view(bs, -1, self.no))
 
-        return (x, proto_out, mask_out) if self.training else (torch.cat(z, 1),
+        return (x, proto_out) if self.training else (torch.cat(z, 1),
                                                                x, proto_out)
         # torch.cat([m.view(bs, -1, self.mask_dim) for m in mask_out], 1))
 

@@ -91,8 +91,7 @@ def detect(save_img=False):
                                     opt.conf_thres,
                                     opt.iou_thres,
                                     classes=opt.classes,
-                                    agnostic=opt.agnostic_nms,
-                                    mask_out=[])
+                                    agnostic=opt.agnostic_nms)
         t2 = time_synchronized()
 
         # Apply Classifier
@@ -210,15 +209,16 @@ if __name__ == '__main__':
         nargs='+',
         type=str,
         default=
-        '/d/projects/research/yolov5/runs/train/person_s/weights/best.pt',
+        '/d/projects/research/yolov5/runs/train/coco_s4/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',
         type=str,
-        default='/e/output2.m4v',
+        # default='/d/baidubase/COCO/val_yolo/images/val',
+        default='data/balloon/images/val',
         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--name',
-                        default='person_s', 
+                        default='coco_s', 
                         help='save results to project/name')
     parser.add_argument('--img-size',
                         type=int,

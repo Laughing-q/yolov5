@@ -96,6 +96,9 @@ def plot_masks(img, masks, colors, alpha=0.5):
 
     transform colors and send img_gpu to cpu for the most time.
     """
+    # for k in range(masks.shape[0]):
+    #     cv2.imshow('p', masks[k].cpu().numpy())
+    #     cv2.waitKey(0)
     img_gpu = img.clone()
     num_masks = len(masks)
     # [n, 1, 1, 3]
@@ -287,6 +290,9 @@ def plot_images_(images,
                  max_size=640,
                  max_subplots=16):
     # Plot image grid with labels
+    # print("targets:", targets.shape)
+    # print("masks:", masks.shape)
+    # print('--------------------------')
 
     if isinstance(images, torch.Tensor):
         images = images.cpu().float().numpy()
@@ -369,9 +375,7 @@ def plot_images_(images,
                     mosaic[
                         block_y:block_y + h, block_x:block_x +
                         w, :][mask] = mosaic[block_y:block_y + h, block_x:block_x +
-                                             w, :][mask] * 0.35 + (np.array(
-                                                 [255, 0, 0], dtype=np.uint8) *
-                                                                   0.65)
+                                             w, :][mask] * 0.35 + (np.array(color) * 0.65)
 
         # Draw image filename labels
         if paths:
