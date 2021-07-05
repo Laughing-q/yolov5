@@ -635,17 +635,17 @@ if __name__ == '__main__':
                         default='./models/yolov5s_seg.yaml',
                         help='model.yaml path')
     parser.add_argument('--name',
-                        default='coco_s',
+                        default='license',
                         help='save to project/name')
     parser.add_argument('--data',
                         type=str,
-                        default='data/balloon.yaml',
+                        default='data/license_plates.yaml',
                         help='data.yaml path')
     parser.add_argument('--hyp',
                         type=str,
                         default='data/hyp.scratch.yaml',
                         help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--batch-size',
                         type=int,
                         default=4,

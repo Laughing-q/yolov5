@@ -131,7 +131,10 @@ class DetectSegment(nn.Module):
                 if self.grid[i].shape[2:4] != x[i].shape[2:4]:
                     self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
 
-                y = x[i].sigmoid()
+                y = x[i]
+                y[..., 0:5] = y[..., 0:5].sigmoid()
+                y[..., 37:] = y[..., 37:].sigmoid()
+
                 y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 +
                                self.grid[i]) * self.stride[i]  # xy
                 y[..., 2:4] = (y[..., 2:4] * 2)**2 * self.anchor_grid[i]  # wh

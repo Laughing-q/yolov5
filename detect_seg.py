@@ -209,16 +209,16 @@ if __name__ == '__main__':
         nargs='+',
         type=str,
         default=
-        '/d/projects/research/yolov5/runs/train/coco_s4/weights/best.pt',
+        '/d/projects/research/yolov5/runs/train/coco_s/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument(
         '--source',
         type=str,
-        # default='/d/baidubase/COCO/val_yolo/images/val',
-        default='data/balloon/images/val',
+        default='/d/baidubase/COCO/val_yolo/images/val',
+        # default='data/license_plates/images/train',
         help='source')  # file/folder, 0 for webcam
     parser.add_argument('--name',
-                        default='coco_s', 
+                        default='license', 
                         help='save results to project/name')
     parser.add_argument('--img-size',
                         type=int,
@@ -226,7 +226,7 @@ if __name__ == '__main__':
                         help='inference size (pixels)')
     parser.add_argument('--conf-thres',
                         type=float,
-                        default=0.5,
+                        default=0.4,
                         help='object confidence threshold')
     parser.add_argument('--iou-thres',
                         type=float,

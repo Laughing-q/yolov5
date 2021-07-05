@@ -325,7 +325,7 @@ def test(
                    args=(img, targets, masks, paths, f, names, 672),
                    daemon=True).start()
 
-            pred_masks = torch.cat(pred_masks, dim=0) if len(pred_masks) > 1 else pred_masks[0]
+            # pred_masks = torch.cat(pred_masks, dim=0) if len(pred_masks) > 1 else pred_masks[0]
             f = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
             # pred_masks与out的长度可能不一致，out是经过nms之后的所有，而pred_masks是根据标签中有的cls再筛选过一次；
             Thread(target=plot_images_,
@@ -422,12 +422,12 @@ if __name__ == '__main__':
         '--weights',
         nargs='+',
         type=str,
-        default='/d/projects/research/yolov5/runs/train/person_s/weights/best.pt',
+        default='/d/projects/research/yolov5/runs/train/coco_s/weights/best.pt',
         help='model.pt path(s)')
     parser.add_argument('--name', default='coco_s', help='save to project/name')
     parser.add_argument('--data',
                         type=str,
-                        default='data/coco_person.yaml',
+                        default='/d/baidubase/COCO/coco.yaml',
                         # default='data/coco_person.yaml',
                         help='*.data path')
     parser.add_argument('--batch-size',
