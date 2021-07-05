@@ -3,6 +3,7 @@ TODO List:
 
 - [ ] 数据加载时的上下左右flip
 - [x] 多类别训练之后，预测mask是反转的
+- [ ] _initialize_biases修改
 
 
 
